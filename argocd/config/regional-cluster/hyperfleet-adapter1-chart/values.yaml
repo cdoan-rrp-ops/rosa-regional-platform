@@ -1,0 +1,291 @@
+# Default values for hyperfleet-adapter1-chart
+# This chart creates an ArgoCD Application that deploys the HyperFleet Adapter Helm chart
+
+hyperfleetAdapter1Chart:
+  # Name of the ArgoCD Application
+  name: hyperfleet-adapter1
+
+  # Namespace where the ArgoCD Application resource will be created
+  namespace: argocd
+
+  # Target namespace where the HyperFleet Adapter will be deployed
+  targetNamespace: hyperfleet-system
+
+  # Source configuration for the external Helm chart
+  source:
+    repoURL: https://github.com/cdoan1/hyperfleet-adapter
+    targetRevision: ROSAENG-133-3
+    path: charts
+
+  # Sync policy configuration
+  syncPolicy:
+    automated:
+      prune: true
+      selfHeal: true
+    syncOptions:
+      - CreateNamespace=false
+      - ServerSideApply=true
+
+  # Additional Helm values to pass to the external chart
+  values:
+    replicaCount: 1
+    image:
+      registry: quay.io/openshift-hyperfleet
+      repository: hyperfleet-adapter
+      tag: v0.1.0
+      pullPolicy: Always
+    serviceAccount:
+      create: true
+      name: hyperfleet-adapter-sa
+      annotations: {}
+    adapterConfig:
+      create: true
+      hyperfleetApi:
+        baseUrl: "http://hyperfleet-api.hyperfleet-system.svc.cluster.local:8000"
+        version: "v1"
+      maestro:
+        # Enable Maestro client for advanced resource management
+        enabled: true
+        grpcServerAddress: "maestro-grpc.maestro-server.svc.cluster.local:8090"
+        httpServerAddress: "http://maestro-http.maestro-server.svc.cluster.local:8080"
+        sourceId: "hyperfleet-adapter"
+        clientId: "hyperfleet-adapter-client"
+        timeout: "30s"
+        retryAttempts: 3
+        retryBackoff: "exponential"
+        # TLS configuration (set insecure: true for development)
+        insecure: true
+        auth:
+          type: "none"  # Use "tls" for production with certificates
+          tlsConfig:
+            caFile: ""
+            certFile: ""
+            keyFile: ""
+      log:
+        level: info
+      yaml: |
+        # Example HyperFleet Adapter deployment configuration
+        apiVersion: hyperfleet.redhat.com/v1alpha1
+        kind: AdapterConfig
+        metadata:
+          name: adapter1
+          labels:
+            hyperfleet.io/adapter-type: kubernetes
+            hyperfleet.io/component: adapter
+        spec:
+          adapter:
+            version: "0.1.0"
+
+          # Log the full merged configuration after load (default: false)
+          debugConfig: true
+          log:
+            level: debug
+
+          clients:
+            hyperfleetApi:
+              baseUrl: http://hyperfleet-api:8000
+              version: v1
+              timeout: 2s
+              retryAttempts: 3
+              retryBackoff: exponential
+
+            broker:
+              # These values are overridden at deploy time via env vars from Helm values
+              subscriptionId: "placeholder"
+              topic: "placeholder"
+
+            kubernetes:
+              apiVersion: "v1"
+              #kubeConfigPath: PATH_TO_KUBECONFIG  # for local development
+    adapterTaskConfig:
+      create: true
+      yaml: |
+        apiVersion: hyperfleet.redhat.com/v1alpha1
+        kind: AdapterTaskConfig
+        metadata:
+          name: adapter1
+          labels:
+            hyperfleet.io/adapter-type: adapter1
+            hyperfleet.io/component: adapter
+        spec:
+          # Parameters with all required variables
+          params:
+
+
+            - name: "clusterId"
+              source: "event.id"
+              type: "string"
+              required: true
+
+            - name: "generation"
+              source: "event.generation"
+              type: "int"
+              required: true
+
+            - name: "namespace"
+              source: "env.NAMESPACE"
+              type: "string"
+
+          # Preconditions with valid operators and CEL expressions
+          preconditions:
+            - name: "clusterStatus"
+              apiCall:
+                method: "GET"
+                url: "/clusters/{{ .clusterId }}"
+                timeout: 10s
+                retryAttempts: 3
+                retryBackoff: "exponential"
+              capture:
+                - name: "clusterName"
+                  field: "name"
+                - name: "generation"
+                  field: "generation"
+                - name: "readyConditionStatus"
+                  expression: |
+                    status.conditions.filter(c, c.type == "Ready").size() > 0
+                      ? status.conditions.filter(c, c.type == "Ready")[0].status
+                      : "False"
+              # Structured conditions with valid operators
+              conditions:
+                - field: "readyConditionStatus"
+                  operator: "equals"
+                  value: "False"
+
+            - name: "validationCheck"
+              # Valid CEL expression
+              expression: |
+                readyConditionStatus == "False"
+
+          # Resources with valid K8s manifests
+          resources:
+            - name: "resource0"
+              transport:
+                client: "kubernetes"
+              manifest:
+                apiVersion: v1
+                kind: ConfigMap
+                data:
+                  cluster_id: "{{ .clusterId }}"
+                  cluster_name: "{{ .clusterName }}"
+                metadata:
+                  name: "{{ .clusterId }}-adapter1-configmap"
+                  namespace: "{{ .namespace }}"
+                  labels:
+                    app.kubernetes.io/component: adapter
+                    app.kubernetes.io/instance: adapter1
+                    app.kubernetes.io/name: hyperfleet-adapter
+                    app.kubernetes.io/version: 1.0.0
+                    app.kubernetes.io/transport: kubernetes
+                    hyperfleet.io/cluster-id: "{{ .clusterId }}"
+                    hyperfleet.io/cluster-name: "{{ .clusterName }}"
+              discovery:
+                namespace: "{{ .namespace }}"
+                bySelectors:
+                  labelSelector:
+                    hyperfleet.io/cluster-id: "{{ .clusterId }}"
+                    hyperfleet.io/cluster-name: "{{ .clusterName }}"
+
+          # Post-processing with valid CEL expressions
+          # This example contains multiple resources, we will only report on the conditions of the jobNamespace not to overcomplicate the example
+          post:
+            payloads:
+              - name: "statusPayload"
+                build:
+                  # TODO: this should come from config.adapter.metadata.name
+                  adapter: "adapter1"
+                  conditions:
+                    # Applied: Job successfully created
+                    - type: "Applied"
+                      status:
+                        expression: |
+                          has(resources.resource0.metadata.creationTimestamp) ? "True" : "False"
+                      reason:
+                        expression: |
+                          has(resources.resource0.metadata.creationTimestamp) ? "ConfigMapApplied" : "ConfigMapPending"
+                      message:
+                        expression: |
+                          has(resources.resource0.metadata.creationTimestamp) 
+                          ? "ConfigMap has been applied correctly" 
+                          : "ConfigMap is pending to be applied"
+                    # Available: Check job status conditions
+                    - type: "Available"
+                      status:
+                        expression: |
+                          has(resources.resource0.data.cluster_id) ? "True" : "False"
+                      reason:
+                        expression: |
+                          has(resources.resource0.data.cluster_id) 
+                            ? "ConfigMap data available"
+                            : "ConfigMap data not yet available"
+                      message:
+                        expression: |
+                          has(resources.resource0.data.cluster_id) 
+                            ? "ConfigMap data available"
+                            : "ConfigMap data not yet available"
+                    # Health: Adapter execution status (runtime)
+                    - type: "Health"
+                      status:
+                        expression: |
+                          adapter.?executionStatus.orValue("") == "success" ? "True" : (adapter.?executionStatus.orValue("") == "failed" ? "False" : "Unknown")
+                      reason:
+                        expression: |
+                          adapter.?errorReason.orValue("") != "" ? adapter.?errorReason.orValue("") : "Healthy"
+                      message:
+                        expression: |
+                          adapter.?errorMessage.orValue("") != "" ? adapter.?errorMessage.orValue("") : "All adapter operations completed successfully"
+                  # Event generation ID metadata field needs to use expression to avoid interpolation issues
+                  observed_generation:
+                    expression: "generation"
+                  observed_time: "{{ now | date \"2006-01-02T15:04:05Z07:00\" }}"
+                  # Optional data field for adapter-specific metrics extracted from resources
+                  data:
+                    namespace:
+                      name:
+                        expression: |
+                          resources.?resources.resource0.?metadata.?name.orValue("")
+                      creationTimestamp:
+                        expression: |
+                          resources.?resources.resource0.?metadata.?creationTimestamp.orValue("")
+
+            postActions:
+              - name: "reportClusterStatus"
+                apiCall:
+                  method: "POST"
+                  url: "/clusters/{{ .clusterId }}/statuses"
+                  headers:
+                    - name: "Content-Type"
+                      value: "application/json"
+                  body: "{{ .statusPayload }}"        
+    broker:
+      create: true
+      rabbitmq:
+        enabled: false
+        url: "amqp://hyperfleet:hyperfleet-dev-password@rabbitmq.rabbitmq.svc.cluster.local:5672/"
+        queue: "hyperfleet-clusters-landing-zone"
+        exchange: "hyperfleet-clusters"
+        exchangeType: "topic"
+        routingKey: "#"
+      # option3: for external broker (e.g. Amazon MQ)
+      external:
+        enabled: true
+        # Use AWS Pod Identity + Secrets Store CSI to load MQ credentials from AWS Secrets Manager.
+        # When true, the chart creates a SecretProviderClass and mounts the secret; env vars
+        # BROKER_RABBITMQ_URL, BROKER_USERNAME, BROKER_PASSWORD, BROKER_HOST, BROKER_PORT are
+        # injected from the AWS secret (see broker.external.aws.secretName).
+        podidentity: true
+        secretMountPath: /mnt/secrets-store
+        # Name of the SecretProviderClass (created by chart when createSecretProviderClass is true)
+        secretProviderClass: "hyperfleet-adapter-mq-secrets"
+        createSecretProviderClass: true
+        # AWS Secrets Manager config when createSecretProviderClass is true.
+        # Expected secret JSON format (e.g. from: aws secretsmanager get-secret-value --secret-id <secretName> --query SecretString --output text):
+        #   { "host": "...", "password": "...", "port": "5671", "url": "amqps://user:pass@host:5671", "username": "..." }
+        aws:
+          region: "us-east-2"
+          secretName: "hyperfleet/mq-credentials"
+        # When podidentity is false, set url here. When podidentity is true, url comes from the AWS secret.
+        url: ""
+        exchangeType: "topic"
+        queue: "hyperfleet-clusters-landing-zone"
+        exchange: "hyperfleet-clusters"
+        routingKey: "#"

@@ -38,14 +38,14 @@ The module provisions:
 
 ## DynamoDB Tables
 
-| Table                          | Hash Key    | Range Key           | GSIs                           |
-| ------------------------------ | ----------- | ------------------- | ------------------------------ |
-| `{prefix}-authz-accounts`      | `accountId` | -                   | -                              |
-| `{prefix}-authz-admins`        | `accountId` | `principalArn`      | -                              |
-| `{prefix}-authz-groups`        | `accountId` | `groupId`           | -                              |
-| `{prefix}-authz-group-members` | `accountId` | `groupId#memberArn` | `member-groups-index`          |
-| `{prefix}-authz-policies`      | `accountId` | `policyId`          | -                              |
-| `{prefix}-authz-attachments`   | `accountId` | `attachmentId`      | `target-index`, `policy-index` |
+| Table | Hash Key | Range Key | GSIs |
+|-------|----------|-----------|------|
+| `{prefix}-authz-accounts` | `accountId` | - | - |
+| `{prefix}-authz-admins` | `accountId` | `principalArn` | - |
+| `{prefix}-authz-groups` | `accountId` | `groupId` | - |
+| `{prefix}-authz-group-members` | `accountId` | `groupId#memberArn` | `member-groups-index` |
+| `{prefix}-authz-policies` | `accountId` | `policyId` | - |
+| `{prefix}-authz-attachments` | `accountId` | `attachmentId` | `target-index`, `policy-index` |
 
 ## Usage
 
@@ -72,30 +72,30 @@ module "authz" {
 
 ## Inputs
 
-| Name                            | Description                       | Type          | Default             | Required |
-| ------------------------------- | --------------------------------- | ------------- | ------------------- | :------: |
-| `resource_name_base`            | Base name for all resources       | `string`      | -                   |   yes    |
-| `eks_cluster_name`              | EKS cluster name for Pod Identity | `string`      | -                   |   yes    |
-| `billing_mode`                  | DynamoDB billing mode             | `string`      | `"PAY_PER_REQUEST"` |    no    |
-| `enable_point_in_time_recovery` | Enable PITR for tables            | `bool`        | `false`             |    no    |
-| `enable_deletion_protection`    | Enable deletion protection        | `bool`        | `false`             |    no    |
-| `platform_api_namespace`        | K8s namespace for Platform API    | `string`      | `"platform-api"`    |    no    |
-| `platform_api_service_account`  | K8s service account name          | `string`      | `"platform-api-sa"` |    no    |
-| `tags`                          | Additional tags                   | `map(string)` | `{}`                |    no    |
+| Name | Description | Type | Default | Required |
+|------|-------------|------|---------|:--------:|
+| `resource_name_base` | Base name for all resources | `string` | - | yes |
+| `eks_cluster_name` | EKS cluster name for Pod Identity | `string` | - | yes |
+| `billing_mode` | DynamoDB billing mode | `string` | `"PAY_PER_REQUEST"` | no |
+| `enable_point_in_time_recovery` | Enable PITR for tables | `bool` | `false` | no |
+| `enable_deletion_protection` | Enable deletion protection | `bool` | `false` | no |
+| `platform_api_namespace` | K8s namespace for Platform API | `string` | `"platform-api"` | no |
+| `platform_api_service_account` | K8s service account name | `string` | `"platform-api-sa"` | no |
+| `tags` | Additional tags | `map(string)` | `{}` | no |
 
 ## Outputs
 
-| Name                          | Description                    |
-| ----------------------------- | ------------------------------ |
-| `accounts_table_name`         | Name of the accounts table     |
-| `admins_table_name`           | Name of the admins table       |
-| `groups_table_name`           | Name of the groups table       |
-| `members_table_name`          | Name of the members table      |
-| `policies_table_name`         | Name of the policies table     |
-| `attachments_table_name`      | Name of the attachments table  |
-| `table_names`                 | Map of all table names         |
-| `table_arns`                  | Map of all table ARNs          |
-| `platform_api_role_arn`       | IAM role ARN for Platform API  |
+| Name | Description |
+|------|-------------|
+| `accounts_table_name` | Name of the accounts table |
+| `admins_table_name` | Name of the admins table |
+| `groups_table_name` | Name of the groups table |
+| `members_table_name` | Name of the members table |
+| `policies_table_name` | Name of the policies table |
+| `attachments_table_name` | Name of the attachments table |
+| `table_names` | Map of all table names |
+| `table_arns` | Map of all table ARNs |
+| `platform_api_role_arn` | IAM role ARN for Platform API |
 | `authz_configuration_summary` | Summary for application config |
 
 ## Application Configuration

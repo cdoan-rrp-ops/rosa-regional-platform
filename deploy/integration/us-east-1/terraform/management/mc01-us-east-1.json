@@ -4,9 +4,10 @@
   "service_phase": "dev",
   "cost_center": "000",
   "environment": "integration",
-  "account_id": "ssm:///infra/integration/us-east-1/mc01/account_id",
+  "account_id": "REMOVED",
   "region": "us-east-1",
   "alias": "mc01-us-east-1",
+  "region_deployment": "us-east-1",
   "cluster_id": "mc01-us-east-1",
-  "regional_aws_account_id": "ssm:///infra/integration/us-east-1/account_id"
+  "regional_aws_account_id": "REMOVED"
 }

@@ -34,6 +34,7 @@ This file provides guidance to AI agents when working with code in this reposito
 - **Logging:** Log security events centrally. Do not log sensitive data. Restrict log access and monitor for suspicious activity.
 - **Networking:** Encrypt all communications. Do not expose unnecessary endpoints or ports. Restrict network access to only what is required.
 
+
 Apply these rules to all code, infrastructure, and processes to maintain a strong security posture across your projects.
 
 ## Secure coding rules for Containers 🐳
@@ -41,7 +42,7 @@ Apply these rules to all code, infrastructure, and processes to maintain a stron
 - Use minimal, up-to-date base images from trusted sources.
 - Remove non-essential software and keep essential ones updated.
 - Run containers as non-root and use read-only filesystems when possible.
-
+ 
 ## Secure coding rules for Go projects 🦫
 
 - Use Go modules for dependency management.

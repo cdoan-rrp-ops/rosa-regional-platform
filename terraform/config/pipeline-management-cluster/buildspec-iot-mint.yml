@@ -52,21 +52,17 @@ phases:
             -backend-config="region=${TARGET_REGION}" \
             -backend-config="use_lockfile=true"
 
-        if [ "${IS_DESTROY:-false}" == "true" ]; then
-            echo "Destroying IoT resources"
-            terraform destroy -var-file="$TEMP_TFVARS" -auto-approve
-            echo "IoT resources destroyed successfully"
-        else
-            terraform plan -var-file="$TEMP_TFVARS" -out=tfplan
-            terraform apply tfplan
-            rm -f tfplan
-            echo ""
-            echo "IoT certificate minted with persistent state in RC account"
-        fi
+        terraform plan -var-file="$TEMP_TFVARS" -out=tfplan
+        terraform apply tfplan
 
-        rm -f "$TEMP_TFVARS"
+        rm -f tfplan "$TEMP_TFVARS"
 
-        echo "IoT mint stage complete."
+        echo ""
+        echo "IoT certificate minted with persistent state in RC account"
+
+  post_build:
+    commands:
+      - echo "IoT mint stage complete."
 
 artifacts:
   files:

@@ -20,10 +20,15 @@ phases:
         echo "  Alias: ${TARGET_ALIAS}"
         echo ""
 
+        # =====================================================================
+        # Phase 1: Read IoT cert/config outputs from RC account state
+        # =====================================================================
+        echo "Reading IoT certificate data from RC account state..."
+
         # Resolve REGIONAL_AWS_ACCOUNT_ID (supports SSM parameter references)
         RESOLVED_REGIONAL_ACCOUNT_ID="${REGIONAL_AWS_ACCOUNT_ID}"
-        if [[ "$RESOLVED_REGIONAL_ACCOUNT_ID" =~ ^ssm:// ]]; then
-            SSM_PARAM_NAME="${RESOLVED_REGIONAL_ACCOUNT_ID#ssm://}"
+        if [[ "$RESOLVED_REGIONAL_ACCOUNT_ID" =~ ^ssm:/ ]]; then
+            SSM_PARAM_NAME="${RESOLVED_REGIONAL_ACCOUNT_ID#ssm:}"
             echo "Resolving SSM parameter: $SSM_PARAM_NAME in region ${TARGET_REGION}"
             RESOLVED_REGIONAL_ACCOUNT_ID=$(aws ssm get-parameter \
                 --name "$SSM_PARAM_NAME" \
@@ -39,23 +44,13 @@ phases:
             exit 1
         fi
 
-        # =====================================================================
-        # Phase 1: Read IoT cert/config outputs from RC account state
-        # (skipped on destroy — IoT resources already cleaned up by Mint-IoT stage)
-        # =====================================================================
-        if [ "${IS_DESTROY:-false}" == "true" ]; then
-            # Terraform still evaluates file() during destroy; provide empty placeholders.
-            # (Can't use /dev/null — the cleanup line below would rm it in the container.)
-            export TF_VAR_maestro_agent_cert_file=$(mktemp)
-            export TF_VAR_maestro_agent_config_file=$(mktemp)
-        else
-            echo "Reading IoT certificate data from RC account state..."
-            use_rc_account
-            source scripts/read-iot-state.sh "$RESOLVED_REGIONAL_ACCOUNT_ID" "$CLUSTER_ID" "$TARGET_REGION"
-        fi
+        use_rc_account
+
+        # Read IoT cert/config from RC account terraform state
+        source scripts/read-iot-state.sh "$RESOLVED_REGIONAL_ACCOUNT_ID" "$CLUSTER_ID" "$TARGET_REGION"
 
         # =====================================================================
-        # Phase 2: Apply/Destroy MC infrastructure
+        # Phase 2: Apply MC infrastructure with IoT cert data
         # =====================================================================
         use_mc_account
 
@@ -122,33 +117,38 @@ phases:
             exit 1
         fi
 
-        export REGION_DEPLOYMENT=$(jq -r '.region' "$MC_CONFIG_FILE")
+        export REGION_DEPLOYMENT=$(jq -r '.region_deployment' "$MC_CONFIG_FILE")
         echo "Extracted REGION_DEPLOYMENT from config: $REGION_DEPLOYMENT"
         export ENVIRONMENT="${ENVIRONMENT:-staging}"
 
         set +e
         if [ "${IS_DESTROY:-false}" == "true" ]; then
-            echo "Destroying management cluster"
+            echo "⚠️ DESTRUCTION MODE ENABLED"
             make pipeline-destroy-management
         else
             make pipeline-provision-management
         fi
-        MAKE_TARGET_STATUS=$?
+        PROVISION_STATUS=$?
         set -e
 
-        if [ $MAKE_TARGET_STATUS -ne 0 ]; then
-            echo "Infrastructure action failed with exit code $MAKE_TARGET_STATUS"
-            exit $MAKE_TARGET_STATUS
+        if [ $PROVISION_STATUS -ne 0 ]; then
+            echo "❌ Infrastructure action failed with exit code $PROVISION_STATUS"
+            exit $PROVISION_STATUS
         fi
 
         # Clean up temp cert files
         rm -f "${TF_VAR_maestro_agent_cert_file:-}" "${TF_VAR_maestro_agent_config_file:-}"
 
+        echo "✅ Infrastructure action complete."
         if [ "${IS_DESTROY:-false}" == "true" ]; then
-             echo "Management cluster destroyed successfully."
+             echo "✅ Management cluster destroyed successfully."
         else
-             echo "Management cluster provisioned successfully."
+             echo "✅ Management cluster provisioned successfully."
         fi
+
+  post_build:
+    commands:
+      - echo "Infrastructure deployment complete."
 artifacts:
   files:
     - '**/*'

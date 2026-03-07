@@ -1,0 +1,23 @@
+apiVersion: argoproj.io/v1alpha1
+kind: Application
+metadata:
+  name: {{ .Values.hyperfleetAdapter1Chart.name }}
+  namespace: {{ .Values.hyperfleetAdapter1Chart.namespace }}
+  labels:
+    {{- include "hyperfleet-adapter1-chart.labels" . | nindent 4 }}
+spec:
+  project: default
+  source:
+    repoURL: {{ .Values.hyperfleetAdapter1Chart.source.repoURL }}
+    targetRevision: {{ .Values.hyperfleetAdapter1Chart.source.targetRevision }}
+    path: {{ .Values.hyperfleetAdapter1Chart.source.path }}
+    {{- if .Values.hyperfleetAdapter1Chart.values }}
+    helm:
+      values: |
+        {{- toYaml .Values.hyperfleetAdapter1Chart.values | nindent 8 }}
+    {{- end }}
+  destination:
+    server: https://kubernetes.default.svc
+    namespace: {{ .Values.hyperfleetAdapter1Chart.targetNamespace }}
+  syncPolicy:
+    {{- toYaml .Values.hyperfleetAdapter1Chart.syncPolicy | nindent 4 }}

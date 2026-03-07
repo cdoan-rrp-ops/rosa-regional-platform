@@ -1,120 +1,228 @@
-# ── Structure ──────────────────────────────────────────────────────────────────
-#
-# environments:
-#   <env_name>:                       # dict key → {{ environment }}
-#     region_deployments:             # (or nest under sectors: <name>: region_deployments:)
-#       <aws_region>:                 # dict key → {{ aws_region }}
-#         account_id: "..."           # → {{ account_id }}
-#         management_clusters:
-#           <cluster_prefix>:         # dict key → cluster_id = "<prefix>-<aws_region>"
-#                                     #           → {{ cluster_prefix }} (inside MC templates only)
-#
-# ── Inheritance (deep merge, most-specific wins) ──────────────────────────────
-#
-#   defaults  →  environment  →  sector  →  region_deployment
-#
-# Inheritable fields: terraform_vars, values, account_id, revision,
-#                     bootstrap_pipeline_revision
-#
-# ── Jinja2 templates ─────────────────────────────────────────────────────────
-#
-# All string values are Jinja2-processed AFTER the full merge chain resolves.
-# Available variables and where they come from:
-#
-#   Variable              Source                          Example
-#   ────────────────────  ──────────────────────────────  ───────────────────
-#   {{ environment }}     environment dict key            "integration"
-#   {{ aws_region }}      region_deployment dict key      "us-east-1"
-#   {{ account_id }}      resolved account_id¹            "ssm:///infra/..."
-#   {{ cluster_prefix }}  management_cluster dict key²    "mc01"
-#
-#   ¹ account_id is resolved (including its own Jinja2) BEFORE terraform_vars
-#     and values are processed, so {{ account_id }} in terraform_vars gets the
-#     final resolved value.
-#
-#   ² cluster_prefix is only available inside management_cluster entries.
-#     It is the dict key of the MC (e.g. "mc01"). The derived cluster_id is
-#     always "{cluster_prefix}-{aws_region}" (e.g. "mc01-us-east-1").
-#
+# sectors:            shared defaults (values, terraform_vars); each has a name and environment
+# region_deployments: region deployments; reference a sector, inherit its config
+# Inheritance: sector `values` & `terraform_vars` deep-merged into region deployment (region deployment wins)
+# Templating:  Jinja2 on all strings, resolved after merge. e.g. "{{ aws_region }}"
 
-defaults:
-  revision: main
-  bootstrap_pipeline_revision: main
-  account_id: "ssm:///infra/{{ environment }}/{{ aws_region }}/account_id"
-  management_cluster_account_id: "ssm:///infra/{{ environment }}/{{ aws_region }}/{{ cluster_prefix }}/account_id"
-  terraform_vars:
-    app_code: "infra"
-    service_phase: "dev"
-    cost_center: "000"
-    environment: "{{ environment }}"
-    account_id: "{{ account_id }}"
-    region: "{{ aws_region }}"
-    alias: "regional-{{ aws_region }}"
-  values:
-    management-cluster:
-      hypershift:
-        oidcStorageS3Bucket:
-          name: "hypershift-mc-{{ aws_region }}"
-          region: "{{ aws_region }}"
-        externalDns:
-          domain: "dev.{{ aws_region }}.rosa.example.com"
-    regional-cluster:
-      maestro:
-        mqttEndpoint: "xxx.iot.{{ aws_region }}.amazonaws.com"
-      someOtherSetting: "value"
-
-environments:
-  e2e:
-    region_deployments:
-      us-east-1:
-        account_id: "633630779107"
-        management_clusters:
-          mc01:
-            account_id: "018092638725"
-
-  cdoan-central:
-    region_deployments:
-      us-east-2:
-        account_id: "754250776154"
-        terraform_vars:
-          enable_bastion: true
-        management_clusters:
-          mc01:
-            account_id: "910485845704"
-
-  integration:
-    region_deployments:
-      us-east-1:
-        management_clusters:
-          mc01: {}
-      us-east-2:
-        revision: "826fa76d08fc2ce87c863196e52d5a4fa9259a82"
-        management_clusters:
-          mc01: {}
-      eu-west-1:
-        management_clusters:
-          mc01: {}
-
-  staging:
+sectors:
+  - name: "e2e"
+    environment: "e2e"
     terraform_vars:
-      service_phase: "staging"
-    region_deployments:
-      us-east-1:
-        management_clusters:
-          mc01: {}
+      app_code: "infra"
+      service_phase: "dev"
+      cost_center: "000"
+      environment: "{{ environment }}"
+    values:
+      management-cluster:
+        hypershift:
+          oidcStorageS3Bucket:
+            name: "hypershift-mc-{{ aws_region }}"
+            region: "{{ aws_region }}"
+          externalDns:
+            domain: "dev.{{ aws_region }}.rosa.example.com"
 
-  brian:
-    region_deployments:
-      us-east-1:
-        terraform_vars:
-          delete: true
-        management_clusters:
-          mc01: {}
-
-  psav-central:
+  - name: "psav-central"
+    environment: "psav-central"
     terraform_vars:
+      app_code: "infra"
+      service_phase: "dev"
+      cost_center: "000"
+      environment: "{{ environment }}"
       enable_bastion: true
-    region_deployments:
-      us-east-1:
-        management_clusters:
-          mc01: {}
+    values:
+      management-cluster:
+        hypershift:
+          oidcStorageS3Bucket:
+            name: "hypershift-mc-{{ aws_region }}"
+            region: "{{ aws_region }}"
+          externalDns:
+            domain: "dev.{{ aws_region }}.rosa.example.com"
+
+  - name: "brian-testing"
+    environment: "brian"
+    terraform_vars:
+      app_code: "infra"
+      service_phase: "dev"
+      cost_center: "000"
+      environment: "{{ environment }}"
+    values:
+      management-cluster:
+        hypershift:
+          oidcStorageS3Bucket:
+            name: "hypershift-mc-{{ aws_region }}"
+            region: "{{ aws_region }}"
+          externalDns:
+            domain: "dev.{{ aws_region }}.rosa.example.com"
+
+  - name: "integration"
+    environment: "integration"
+    terraform_vars:
+      app_code: "infra"
+      service_phase: "dev"
+      cost_center: "000"
+      environment: "{{ environment }}"
+    values:
+      management-cluster:
+        hypershift:
+          oidcStorageS3Bucket:
+            name: "hypershift-mc-{{ aws_region }}"
+            region: "{{ aws_region }}"
+          externalDns:
+            domain: "dev.{{ aws_region }}.rosa.example.com"
+
+  - name: "cdoan-central"
+    environment: "cdoan-central"
+    terraform_vars:
+      app_code: "infra"
+      service_phase: "dev"
+      cost_center: "000"
+      environment: "{{ environment }}"
+    values:
+      management-cluster:
+        hypershift:
+          oidcStorageS3Bucket:
+            name: "hypershift-mc-{{ aws_region }}"
+            region: "{{ aws_region }}"
+          externalDns:
+            domain: "dev.{{ aws_region }}.rosa.example.com"
+
+  - name: "staging"
+    environment: "staging"
+    terraform_vars:
+      app_code: "infra"
+      service_phase: "staging"
+      cost_center: "000"
+      environment: "{{ environment }}"
+    values:
+      management-cluster:
+        hypershift:
+          oidcStorageS3Bucket:
+            name: "hypershift-mc-{{ aws_region }}"
+            region: "{{ aws_region }}"
+          externalDns:
+            domain: "dev.{{ aws_region }}.rosa.example.com"
+
+region_deployments:
+  - name: "us-east-1"
+    aws_region: "us-east-1"
+    sector: "e2e"
+    account_id: "633630779107"
+    terraform_vars:
+      account_id: "{{ account_id }}"
+      region: "{{ aws_region }}"
+      alias: "regional-{{region_deployment}}"
+      region_deployment: "{{ region_deployment }}"
+    management_clusters:
+      - cluster_id: "mc01-{{ region_deployment }}"
+        account_id: "018092638725"
+    values:
+      regional-cluster:
+        maestro:
+          mqttEndpoint: "xxx.iot.{{ aws_region }}.amazonaws.com"
+        someOtherSetting: "value"
+
+  - name: "us-east-2"
+    aws_region: "us-east-2"
+    sector: "cdoan-central"
+    account_id: "754250776154"
+    terraform_vars:
+      account_id: "{{ account_id }}"
+      region: "{{ aws_region }}"
+      alias: "regional-{{region_deployment}}"
+      region_deployment: "{{ region_deployment }}"
+      enable_bastion: true
+    management_clusters:
+      - cluster_id: "mc01-{{ region_deployment }}"
+        account_id: "910485845704"
+    values:
+      regional-cluster:
+        maestro:
+          mqttEndpoint: "xxx.iot.{{ aws_region }}.amazonaws.com"
+        someOtherSetting: "value"
+
+  - name: "us-east-1"
+    aws_region: "us-east-1"
+    sector: "integration"
+    account_id: "REMOVED"
+    terraform_vars:
+      account_id: "{{ account_id }}"
+      region: "{{ aws_region }}"
+      alias: "regional-{{region_deployment}}"
+      region_deployment: "{{ region_deployment }}"
+    management_clusters:
+      - cluster_id: "mc01-{{ region_deployment }}"
+        account_id: "REMOVED"
+
+  - name: "us-east-2"
+    aws_region: "us-east-2"
+    sector: "integration"
+    account_id: "REMOVED"
+    terraform_vars:
+      account_id: "{{ account_id }}"
+      region: "{{ aws_region }}"
+      alias: "regional-{{region_deployment}}"
+      region_deployment: "{{ region_deployment }}"
+    management_clusters:
+      - cluster_id: "mc01-{{ region_deployment }}"
+        account_id: "REMOVED"
+    values:
+      regional-cluster:
+        maestro:
+          mqttEndpoint: "xxx.iot.{{ aws_region }}.amazonaws.com"
+        someOtherSetting: "value"
+
+  - name: "eu-west-1"
+    aws_region: "eu-west-1"
+    sector: "integration"
+    account_id: "REMOVED"
+    terraform_vars:
+      account_id: "{{ account_id }}"
+      region: "{{ aws_region }}"
+      alias: "regional-{{region_deployment}}"
+      region_deployment: "{{ region_deployment }}"
+    management_clusters:
+      - cluster_id: "mc01-{{ region_deployment }}"
+        account_id: "REMOVED"
+    config_revision:
+      management-cluster: "826fa76d08fc2ce87c863196e52d5a4fa9259a82"
+      regional-cluster: "826fa76d08fc2ce87c863196e52d5a4fa9259a82"
+
+  - name: "us-east-1"
+    aws_region: "us-east-1"
+    sector: "staging"
+    account_id: "REMOVED"
+    terraform_vars:
+      account_id: "{{ account_id }}"
+      region: "{{ aws_region }}"
+      alias: "regional-{{region_deployment}}"
+      region_deployment: "{{ region_deployment }}"
+    management_clusters:
+      - cluster_id: "mc01-{{ region_deployment }}"
+        account_id: "REMOVED"
+
+  - name: "us-east-1"
+    aws_region: "us-east-1"
+    sector: "brian"
+    account_id: "ssm:/infra/staging/us-east-1/account_id"
+    terraform_vars:
+      delete: true
+      account_id: "{{ account_id }}"
+      region: "{{ aws_region }}"
+      alias: "regional-{{region_deployment}}"
+      region_deployment: "{{ region_deployment }}"
+    management_clusters:
+      - cluster_id: "mc01-{{ region_deployment }}"
+        account_id: "ssm:/infra/staging/us-east-1/mc01/account_id"
+
+  - name: "us-east-1"
+    aws_region: "us-east-1"
+    sector: "psav-central"
+    account_id: "ssm:/infra/psav-central/us-east-1/account_id"
+    terraform_vars:
+      account_id: "{{ account_id }}"
+      region: "{{ aws_region }}"
+      alias: "regional-{{region_deployment}}"
+      region_deployment: "{{ region_deployment }}"
+      enable_bastion: true
+    management_clusters:
+      - cluster_id: "mc01-{{ region_deployment }}"
+        account_id: "ssm:/infra/psav-central/us-east-1/mc01/account_id"

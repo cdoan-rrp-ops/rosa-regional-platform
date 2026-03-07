@@ -19,8 +19,8 @@ mdc: true
 _A platform engineer can deploy a new region manually, composed of an EKS Regional Cluster (RC) and EKS Management Cluster (MC). They can submit a resource via the Platform API, and see it applied in the MC via Maestro, and receive status feedback._
 
 ---
-
-## layout: default
+layout: default
+---
 
 # What We've Built
 
@@ -35,6 +35,7 @@ _A platform engineer can deploy a new region manually, composed of an EKS Region
 [docs / full-region-provisioning.md](https://github.com/openshift-online/rosa-regional-platform/blob/main/docs/full-region-provisioning.md)
 
 <img src="./images/full-region-provisioning.png" alt="Full region provisioning diagram showing the end-to-end steps and components for deploying a new region" class="h-100 mx-auto" />
+
 
 ---
 
@@ -100,7 +101,6 @@ cp terraform/.../terraform.tfvars.example \
 # Provision Regional Cluster
 make provision-regional
 ```
-
 This runs a terraform that provisions all the Regional Cluster infrastructure.
 
 </div>
@@ -122,6 +122,7 @@ This runs a terraform that provisions all the Regional Cluster infrastructure.
 As part of `make provision-regional`, an **ECS Fargate task** runs to **install ArgoCD**, then GitOps takes over. **ArgoCD** automatically **deploys all Regional Cluster workloads** from Git.
 
 <img src="./diagrams/03-argocd-bootstrap.png" alt="ArgoCD bootstrap diagram showing ECS Fargate installing ArgoCD and GitOps deploying Regional Cluster workloads" class="h-80 mx-auto" />
+
 
 ---
 
@@ -194,6 +195,7 @@ Register the MC with the Regional Cluster's Maestro Server.
 <div class="grid grid-cols-2 gap-4">
 <div>
 
+
 ```bash
 awscurl -X POST \
   https://$API_GATEWAY_URL/prod/api/v0/management_clusters \
@@ -259,12 +261,10 @@ The `payload.json` is a ManifestWork resource documented in the [End-to-End Veri
 ```json
 {
   "resourceStatus": {
-    "conditions": [
-      {
-        "type": "Applied",
-        "status": "True"
-      }
-    ]
+    "conditions": [{
+      "type": "Applied",
+      "status": "True"
+    }]
   }
 }
 ```
@@ -283,10 +283,8 @@ The `payload.json` is a ManifestWork resource documented in the [End-to-End Veri
 <img src="./images/request-flow.png" alt="Request flow diagram showing a client request through API Gateway to the Regional Cluster and Maestro distribution to the Management Cluster" class="h-100 mx-auto" />
 
 ---
-
 layout: center
 class: text-center
-
 ---
 
 # Milestone 1 Complete ✅
@@ -295,6 +293,6 @@ Regional Cluster and Management Cluster provisioned on EKS.
 
 What's next?
 
-[ROSA-667 - Milestone 2 - Continuous Validation](https://issues.redhat.com/browse/ROSA-667)
+[ROSA-667 -  Milestone 2 - Continuous Validation](https://issues.redhat.com/browse/ROSA-667)
 
-[ROSA-668 - Milestone 3 - HCPs run on EKS MCs](https://issues.redhat.com/browse/ROSA-668)
+[ROSA-668 -  Milestone 3 - HCPs run on EKS MCs](https://issues.redhat.com/browse/ROSA-668)

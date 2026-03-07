@@ -11,9 +11,4 @@
 # Generated: render.py
 #
 
-hypershift:
-  oidcStorageS3Bucket:
-    name: hypershift-mc-us-east-1
-    region: us-east-1
-  externalDns:
-    domain: dev.us-east-1.rosa.example.com
+{}

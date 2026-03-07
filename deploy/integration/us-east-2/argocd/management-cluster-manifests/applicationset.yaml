@@ -7,7 +7,7 @@
 #
 # Cluster Type: management-cluster
 # Region Deployment: us-east-2 (integration)
-# Config Revision: 826fa76d
+# Config Revision: metadata.annotations.git_revision
 # Generated: render.py
 #
 
@@ -30,7 +30,7 @@ spec:
           - path: argocd/config/{{ .metadata.labels.cluster_type }}/*
           - path: argocd/config/shared/*
           repoURL: '{{ .metadata.annotations.git_repo }}'
-          revision: 826fa76d08fc2ce87c863196e52d5a4fa9259a82
+          revision: '{{ .metadata.annotations.git_revision }}'
   template:
     metadata:
       name: '{{ .path.basename }}'
@@ -68,18 +68,24 @@ spec:
                 args:
                   dynamodbRegion: '{{ .metadata.annotations.dynamodb_region }}'
                   dynamodbPrefix: '{{ .metadata.annotations.dynamodb_prefix }}'
-            hyperfleetApi:
-              aws:
-                region: '{{ .metadata.labels.aws_region }}'
+            hyperfleetApiChart:
+              values:
+                database:
+                  external:
+                    aws:
+                      region: '{{ .metadata.labels.aws_region }}'
             hyperfleetSentinel:
               aws:
                 region: '{{ .metadata.labels.aws_region }}'
-            hyperfleetAdapter:
-              aws:
-                region: '{{ .metadata.labels.aws_region }}'
+            hyperfleetAdapter1Chart:
+              values:
+                broker:
+                  external:
+                    aws:
+                      region: '{{ .metadata.labels.aws_region }}'
         path: '{{ .path.path }}'
         repoURL: '{{ .metadata.annotations.git_repo }}'
-        targetRevision: 826fa76d08fc2ce87c863196e52d5a4fa9259a82
+        targetRevision: '{{ .metadata.annotations.git_revision }}'
       - repoURL: '{{ .metadata.annotations.git_repo | replace "github.com" "github.com:443" }}'
         targetRevision: '{{ .metadata.annotations.git_revision }}'
         ref: values

@@ -25,7 +25,6 @@ The ROSA Regional Platform implements a GitOps cluster configuration system usin
 **ArgoCD ApplicationSets**: ArgoCD's ApplicationSet controller automatically generates multiple ArgoCD Applications based on templates and generators. Instead of manually creating dozens of Applications for each cluster, we use one ApplicationSet that discovers applications and clusters dynamically.
 
 **Matrix Generators**: ApplicationSets support different generator types. We use a "matrix" generator that combines two other generators:
-
 - **Cluster Generator**: Finds clusters to deploy to (in our case, finds the cluster's own identity)
 - **Git Generator**: Discovers applications to deploy by scanning repository directories
 
@@ -63,7 +62,6 @@ sequenceDiagram
 Each cluster uses a **rendered ApplicationSet** that's customized per environment through the render script. The render script creates environment-specific ApplicationSets with hash overrides for production deployments.
 
 **Integration Environment (Live Config)**:
-
 ```yaml
 # deploy/integration/eu-west-1/argocd/management-cluster-manifests/applicationset.yaml
 apiVersion: argoproj.io/v1alpha1
@@ -83,29 +81,28 @@ spec:
               directories:
                 - path: argocd/config/{{ .metadata.labels.cluster_type }}/*
                 - path: argocd/config/shared/*
-              repoURL: "{{ .metadata.annotations.git_repo }}"
+              repoURL: '{{ .metadata.annotations.git_repo }}'
               # Integration: Uses git_revision from cluster secret (main branch)
-              revision: "{{ .metadata.annotations.git_revision }}"
+              revision: '{{ .metadata.annotations.git_revision }}'
   template:
     spec:
       sources:
         # Source 1: Charts + default values (from cluster secret revision)
-        - path: "{{ .path.path }}"
+        - path: '{{ .path.path }}'
           helm:
             valueFiles:
-              - values.yaml # Chart defaults
+              - values.yaml  # Chart defaults
               - $values/deploy/{{ .metadata.labels.environment }}/{{ .metadata.labels.region_deployment }}/argocd/{{ .metadata.labels.cluster_type }}-values.yaml
-          repoURL: "{{ .metadata.annotations.git_repo }}"
-          targetRevision: "{{ .metadata.annotations.git_revision }}" # From cluster secret
+          repoURL: '{{ .metadata.annotations.git_repo }}'
+          targetRevision: '{{ .metadata.annotations.git_revision }}'  # From cluster secret
 
         # Source 2: Rendered values (from cluster secret revision)
         - ref: values
-          repoURL: '{{ .metadata.annotations.git_repo | replace "github.com" "github.com:443" }}' # Workaround for duplicate repo
-          targetRevision: "{{ .metadata.annotations.git_revision }}" # From cluster secret
+          repoURL: '{{ .metadata.annotations.git_repo | replace "github.com" "github.com:443" }}'  # Workaround for duplicate repo
+          targetRevision: '{{ .metadata.annotations.git_revision }}'  # From cluster secret
 ```
 
 **Staging/Production (Hash-Pinned Config)**:
-
 ```yaml
 # deploy/staging/eu-west-1/argocd/management-cluster-manifests/applicationset.yaml
 apiVersion: argoproj.io/v1alpha1
@@ -125,25 +122,25 @@ spec:
               directories:
                 - path: argocd/config/{{ .metadata.labels.cluster_type }}/*
                 - path: argocd/config/shared/*
-              repoURL: "{{ .metadata.annotations.git_repo }}"
+              repoURL: '{{ .metadata.annotations.git_repo }}'
               # Staging/Prod: Uses pinned commit hash from config.yaml
               revision: 826fa76d08fc2ce87c863196e52d5a4fa9259a82
   template:
     spec:
       sources:
         # Source 1: Charts + default values (pinned to specific commit)
-        - path: "{{ .path.path }}"
+        - path: '{{ .path.path }}'
           helm:
             valueFiles:
-              - values.yaml # Chart defaults from pinned commit
+              - values.yaml  # Chart defaults from pinned commit
               - $values/deploy/{{ .metadata.labels.environment }}/{{ .metadata.labels.region_deployment }}/argocd/{{ .metadata.labels.cluster_type }}-values.yaml
-          repoURL: "{{ .metadata.annotations.git_repo }}"
-          targetRevision: 826fa76d08fc2ce87c863196e52d5a4fa9259a82 # Pinned commit hash
+          repoURL: '{{ .metadata.annotations.git_repo }}'
+          targetRevision: 826fa76d08fc2ce87c863196e52d5a4fa9259a82  # Pinned commit hash
 
         # Source 2: Rendered values (still from cluster secret for latest config)
         - ref: values
-          repoURL: '{{ .metadata.annotations.git_repo | replace "github.com" "github.com:443" }}' # Workaround for duplicate repo
-          targetRevision: "{{ .metadata.annotations.git_revision }}" # From cluster secret (latest values)
+          repoURL: '{{ .metadata.annotations.git_repo | replace "github.com" "github.com:443" }}'  # Workaround for duplicate repo
+          targetRevision: '{{ .metadata.annotations.git_revision }}'  # From cluster secret (latest values)
 ```
 
 **Key Implementation Details**:
@@ -172,18 +169,17 @@ Helm charts use a simple two-layer configuration system:
 ```yaml
 # ApplicationSet uses both sources
 sources:
-  - path: argocd/config/management-cluster/hypershift # Chart + defaults
+  - path: argocd/config/management-cluster/hypershift  # Chart + defaults
     helm:
       valueFiles:
-        - values.yaml # Chart defaults
-        - $values/deploy/{{ .environment }}/{{ .region_deployment }}/argocd/management-cluster-values.yaml # Overrides
-  - ref: values # Rendered overrides source
+        - values.yaml  # Chart defaults
+        - $values/deploy/{{ .environment }}/{{ .region_deployment }}/argocd/management-cluster-values.yaml  # Overrides
+  - ref: values  # Rendered overrides source
     repoURL: https://github.com/openshift-online/rosa-platform
     targetRevision: HEAD
 ```
 
 **Example**:
-
 - Chart default: `hypershift.replicas: 1`
 - Rendered override: `hypershift.replicas: 3`
 - **Result**: `hypershift.replicas: 3` (override wins)
@@ -227,7 +223,6 @@ sequenceDiagram
 **Bootstrap-then-Handoff Pattern**: After the initial ECS-based installation, ArgoCD manages its own updates by pulling its chart version from the self-owning application within the ApplicationSet matrix.
 
 **Self-Management Benefits**:
-
 - **Zero External Dependencies**: No ongoing external access required for cluster configuration management
 - **Audit Trail Preservation**: All changes tracked through Git commits, including ArgoCD's own updates
 - **Version Control**: ArgoCD version pinning through the same `config_revision` mechanism used for other applications
@@ -270,20 +265,17 @@ region_deployments:
 ### Operability
 
 **Configuration Management**:
-
 - Single `config.yaml` file provides clear configuration entry point
 - Automated rendering creates single configuration file entrypoint for the whole fleet
 - Git-based workflow integrates with standard development practices
 - Clear separation between chart definitions and environment customization
 
 **Troubleshooting**:
-
 - ArgoCD UI provides comprehensive application health visualization
 - Git commit history enables configuration change tracking
 - Rendered value files provide clear visibility into final configuration
 
 **Emergency Procedures**:
-
 - Git revert capabilities enable rapid rollback
 - Manual Application and cluster identity secret can be updated by re-running ECS task if needed
 - Cluster-level ArgoCD isolation prevents cross-cluster impact
@@ -293,7 +285,6 @@ region_deployments:
 Through a systematic proof-of-concept evaluation process, three alternative configuration approaches were evaluated and rejected:
 
 ### 1. Static Repository Paths
-
 **Approach**: ECS task installs ArgoCD on cluster and creates application pointing at static path for management cluster applications
 
 ```mermaid
@@ -322,13 +313,11 @@ spec:
 ```
 
 **Pros**:
-
 - Minimal configuration overhead
 - Simple to understand and implement
 - Single source of truth for all clusters
 
 **Cons**:
-
 - No region-specific configurations possible
 - Doesn't support regional independence goal
 - All clusters forced to same application versions
@@ -337,7 +326,6 @@ spec:
 **Decision**: Rejected - too limiting for multi-region requirements
 
 ### 2. Dynamic Repository Paths
-
 **Approach**: ECS task installs ArgoCD on cluster and creates application pointing at path by region/env, e.g. `rendered/management-cluster/integration/us-west-1`. Render script creates duplicated/rendered apps for each region.
 
 ```mermaid
@@ -358,7 +346,6 @@ sequenceDiagram
 ```
 
 **Repository Structure**:
-
 ```
 config/management-cluster/
 ├── maestro/
@@ -391,13 +378,11 @@ spec:
 ```
 
 **CI/CD Characteristics**:
-
 - Single component updates cascade across regions by updating overrides through regions for single app roll-out
 - Very fast for individual component propagation
 - Each region can independently lag behind or advance beyond others
 
 **Pros**:
-
 - Simple implementation with familiar patterns
 - Region-specific configurations fully supported
 - Independent region deployment control
@@ -406,15 +391,14 @@ spec:
 - Standardization benefit - used by gcp-hcp team
 
 **Cons**:
-
 - Chart duplication across all regions in rendered directories
 - Maintenance overhead scales with region count
 - Version drift risk between regions
 - Repository size growth becomes problematic
 - Testing complexity - configurations can differ vastly between regions, reducing test confidence
 
-### 3. ApplicationSet with Dynamic Paths
 
+### 3. ApplicationSet with Dynamic Paths
 **Approach**: ECS task installs ArgoCD, creates cluster secret for cluster identity with labels/annotations (region_deployment, aws_region, env, cluster name, repository, revision), creates application that points at a static ApplicationSet which uses cluster secret labels to point at the right charts based on cluster type, and uses region specific values created through render script.
 
 ```mermaid
@@ -495,7 +479,6 @@ spec:
 ```
 
 **Pros**:
-
 - Eliminates chart duplication completely
 - Consistent chart versions across regions
 - Dynamic application discovery
@@ -503,7 +486,6 @@ spec:
 - Single ApplicationSet manages all regions
 
 **Cons**:
-
 - Abstraction layer reduces visibility - harder to see what's deployed without understanding ApplicationSet logic
 - No explicit versioning control for production safety
 - All regions follow same chart commits automatically
@@ -514,14 +496,12 @@ spec:
 ## Continuous Delivery Evaluation: Option 2 vs Current Approach
 
 **Option 2 Trade-offs**:
-
 - Very fast individual component propagation region by region
 - Could implement cascading updates across regions by overriding from canonical region
 - Each region can have different versions, reducing test confidence
 - Requires complex tooling to manage region-to-region propagation
 
 **Current Approach Trade-offs**:
-
 - Trades single component speed for comprehensive bundle testing
 - All regions deploy identical, fully-tested chart combinations
 - Single configuration file controls all deployments

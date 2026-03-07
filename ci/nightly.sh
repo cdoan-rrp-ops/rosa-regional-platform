@@ -1,11 +1,47 @@
 #!/bin/bash
 set -euo pipefail
 
+SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
+readonly SCRIPT_DIR
+REPO_ROOT="$(cd "$SCRIPT_DIR/.." && pwd)"
+readonly REPO_ROOT
+
+## ===============================
+## Configuration
+## ===============================
+
+export AWS_REGION="${AWS_REGION:-us-east-1}"
+export AWS_PAGER=""
+
+# Terraform variables (only values that differ from terraform defaults)
+export TF_VAR_region="${AWS_REGION}"
+export TF_VAR_app_code="e2e"
+export TF_VAR_service_phase="test"
+export TF_VAR_cost_center="000"
+export TF_VAR_repository_url="${REPOSITORY_URL:-https://github.com/openshift-online/rosa-regional-platform.git}"
+export TF_VAR_repository_branch="${REPOSITORY_BRANCH:-main}"
+echo "Targeting repository: ${TF_VAR_repository_url} branch: ${TF_VAR_repository_branch}"
+
+# Platform Container images
+# TODO: codepipeline will be able to build the platform for each or use public image
+RC_CONTAINER_IMAGE="633630779107.dkr.ecr.us-east-1.amazonaws.com/e2e-platform-01c48e:3278a75292a3"
+MC_CONTAINER_IMAGE="018092638725.dkr.ecr.us-east-1.amazonaws.com/e2e-platform-7f0b54:3278a75292a3"
+
+# ArgoCD environment
+export ENVIRONMENT="e2e"
+export REGION_DEPLOYMENT="us-east-1" # Note - this is not necesarily equal to the AWS_REGION! Could be `us-east-1-v2`
+
+# Paths
+MC_TFVARS="${REPO_ROOT}/terraform/config/management-cluster/terraform.tfvars"
+
+# Credentials mounted at /var/run/rosa-credentials/ via ci-operator credentials mount
+CREDS_DIR="/var/run/rosa-credentials/"
+
 ## ===============================
 ## Helper Functions
 ## ===============================
 
-log() { echo "[$(date +'%Y-%m-%d %H:%M:%S')] $*"; }
+log() { echo "[$(date +'%Y-%m-%d %H:%M:%S')] e2e:$*"; }
 log_info() { log " $1"; }
 log_success() { log " $1"; }
 log_error() { log " $1" >&2; }
@@ -16,254 +52,168 @@ log_phase() {
     echo "=========================================="
 }
 
+compute_hash() {
+    echo "$1" | sha256sum | cut -c1-6
+}
+
+configure_state() {
+    local hash="$1"
+    local resource="$2"
+    export TF_STATE_BUCKET="e2e-rosa-regional-platform-${hash}"
+    export TF_STATE_KEY="e2e-rosa-regional-platform-${resource}-${hash}.tfstate"
+    export TF_STATE_REGION=${AWS_REGION}
+}
+
+terraform_init() {
+    local tf_dir="$1"
+    local use_lockfile="${2:-true}"
+    cd "${REPO_ROOT}/${tf_dir}"
+    terraform init -reconfigure \
+        -backend-config="bucket=${TF_STATE_BUCKET}" \
+        -backend-config="key=${TF_STATE_KEY}" \
+        -backend-config="region=${TF_STATE_REGION}" \
+        -backend-config="use_lockfile=${use_lockfile}"
+}
+
+# TODO: Eliminate this tfvars file by setting cluster_id, enable_bastion, and
+# regional_aws_account_id as TF_VAR_ exports, and updating the IoT scripts to
+# accept values via env vars instead of parsing a tfvars path.
+write_mc_tfvars() {
+    log_info "Writing management cluster terraform.tfvars..."
+    cat > "${MC_TFVARS}" <<EOF
+cluster_id = "mc-${MC_HASH}"
+app_code = "e2e"
+service_phase = "test"
+cost_center = "000"
+repository_url = "${TF_VAR_repository_url}"
+repository_branch = "${TF_VAR_repository_branch}"
+enable_bastion = false
+region = "${AWS_REGION}"
+regional_aws_account_id = "${REGIONAL_ACCOUNT_ID}"
+EOF
+}
+
+source "$REPO_ROOT/ci/utils.sh"
+
+## ===============================
+## Credential Setup
+## ===============================
+
+## Setup AWS Account 0 (regional)
+
+REGIONAL_CREDS=$(mktemp)
+cat > "${REGIONAL_CREDS}" <<EOF
+[default]
+aws_access_key_id = $(cat "${CREDS_DIR}/regional_access_key")
+aws_secret_access_key = $(cat "${CREDS_DIR}/regional_secret_key")
+EOF
+
+export AWS_SHARED_CREDENTIALS_FILE="${REGIONAL_CREDS}"
+aws sts get-caller-identity
+
+REGIONAL_ACCOUNT_ID=$(aws sts get-caller-identity --query Account --output text)
+echo "Using REGIONAL_ACCOUNT_ID: ${REGIONAL_ACCOUNT_ID}"
+
+## Setup AWS Account 1 (management)
+
+MGMT_CREDS=$(mktemp)
+cat > "${MGMT_CREDS}" <<EOF
+[default]
+aws_access_key_id = $(cat "${CREDS_DIR}/management_access_key")
+aws_secret_access_key = $(cat "${CREDS_DIR}/management_secret_key")
+EOF
+
+export AWS_SHARED_CREDENTIALS_FILE="${MGMT_CREDS}"
+aws sts get-caller-identity
+
+MANAGEMENT_ACCOUNT_ID=$(aws sts get-caller-identity --query Account --output text)
+echo "Using MANAGEMENT_ACCOUNT_ID: ${MANAGEMENT_ACCOUNT_ID}"
+
+# Compute hashes (BUILD_ID from prow job; fall back to account ID for local runs)
+# Hashes are used for unique resources to allow parallel tests in the same AWS accounts.
+RC_HASH=$(compute_hash "${BUILD_ID:-${REGIONAL_ACCOUNT_ID}}")
+MC_HASH=$(compute_hash "${BUILD_ID:-${MANAGEMENT_ACCOUNT_ID}}")
+
 ## ===============================
 ## Parse Arguments
 ## ===============================
 
 TEARDOWN=false
-BOOTSTRAP_CENTRAL=false
 for arg in "$@"; do
   case "$arg" in
     --teardown) TEARDOWN=true ;;
-    --bootstrap-central-account) BOOTSTRAP_CENTRAL=true ;;
     *)
-      log_error "Unknown argument: $arg"
-      echo "Usage: $0 [--teardown] [--bootstrap-central-account]" >&2
+      echo "Unknown argument: $arg" >&2
+      echo "Usage: $0 [--teardown]" >&2
       exit 1
       ;;
   esac
 done
 
 ## ===============================
-## Configuration
-## ===============================
-
-export AWS_REGION="${AWS_REGION:-us-east-1}"
-export GITHUB_REPOSITORY=$(echo "${REPOSITORY_URL:-openshift-online/rosa-regional-platform}" | sed -E 's|.*github.com/||; s|\.git$||')
-export GITHUB_BRANCH="${REPOSITORY_BRANCH:-main}"
-export TARGET_ENVIRONMENT="${TARGET_ENV:-e2e}"
-
-log_phase "Configuration:"
-log_info "  Region:      ${AWS_REGION}"
-log_info "  Repo:        ${GITHUB_REPOSITORY}"
-log_info "  Branch:      ${GITHUB_BRANCH}"
-log_info "  Environment: ${TARGET_ENVIRONMENT}"
-
-## ===============================
-## Credential Setup
-## ===============================
-
-log_phase "Setting up central account access"
-# Load central account credentials
-
-# Credentials mounted at /var/run/rosa-credentials/ via ci-operator credentials mount
-CREDS_DIR="/var/run/rosa-credentials/"
-
-# 1. Setup Central Account (Primary Identity)
-export AWS_ACCESS_KEY_ID=$(< "${CREDS_DIR}/ci_access_key")
-export AWS_SECRET_ACCESS_KEY=$(< "${CREDS_DIR}/ci_secret_key")
-
-# Perform Assume Role for Central CI Role
-ASSUME_ROLE_ARN=$(< "${CREDS_DIR}/ci_assume_role_arn")
-ROLE_JSON=$(aws sts assume-role \
-    --role-arn "${ASSUME_ROLE_ARN}" \
-    --role-session-name "e2e-test-$(date +%s)")
-
-export AWS_ACCESS_KEY_ID=$(echo "${ROLE_JSON}" | jq -r .Credentials.AccessKeyId)
-export AWS_SECRET_ACCESS_KEY=$(echo "${ROLE_JSON}" | jq -r .Credentials.SecretAccessKey)
-export AWS_SESSION_TOKEN=$(echo "${ROLE_JSON}" | jq -r .Credentials.SessionToken)
-
-CENTRAL_ACCOUNT_ID=$(aws sts get-caller-identity --query "Account" --output text)
-log_info "Access set up to Central CI Account ID: ${CENTRAL_ACCOUNT_ID}"
-
-# ==============================================================================
-# TEMPORARY: Function to setup trust policy in sub-accounts
-# TODO(typeid): We should have least priviledge role (not OrganizationAccessRole) 
-# by default in the minted RC/MC accounts.
-# ==============================================================================
-setup_target_account_pipeline_trust() {
-    local prefix=$1
-    log_info "Temporary Setup: Updating trust policy in ${prefix} account"
-
-    local role_name="OrganizationAccountAccessRole"
-    local principal="arn:aws:iam::${CENTRAL_ACCOUNT_ID}:root"
-
-    # Subshell: environment changes stay inside the ( )
-    (
-        unset AWS_SESSION_TOKEN
-        export AWS_ACCESS_KEY_ID=$(< "${CREDS_DIR}/${prefix}_access_key")
-        export AWS_SECRET_ACCESS_KEY=$(< "${CREDS_DIR}/${prefix}_secret_key")
-
-        # Fetch existing trust policy
-        local existing_policy
-        existing_policy=$(aws iam get-role \
-            --role-name "${role_name}" \
-            --query 'Role.AssumeRolePolicyDocument' --output json)
-
-        # Check if the principal is already trusted
-        if echo "${existing_policy}" | jq -e \
-            --arg principal "${principal}" \
-            '.Statement[] | select(.Effect == "Allow" and .Action == "sts:AssumeRole" and .Principal.AWS == $principal)' \
-            > /dev/null 2>&1; then
-            log_info "Trust for ${principal} already exists in ${prefix} account, skipping."
-            exit 0
-        fi
-
-        # Append the new statement to the existing policy
-        local updated_policy
-        updated_policy=$(echo "${existing_policy}" | jq \
-            --arg principal "${principal}" \
-            '.Statement += [{
-                "Effect": "Allow",
-                "Principal": { "AWS": $principal },
-                "Action": "sts:AssumeRole"
-            }]')
-
-        aws iam update-assume-role-policy \
-            --role-name "${role_name}" \
-            --policy-document "${updated_policy}"
-    )
-
-    log_success "Updated trust on ${role_name} in ${prefix} account to allow assumeRole from ${principal}."
-}
-
-# Run the temporary setup for both target accounts
-log_phase "Setting up trust policies for pipeline role in regional and management account"
-setup_target_account_pipeline_trust "regional"
-setup_target_account_pipeline_trust "management"
-
-## ===============================
-## Pipeline Helper Functions
-## ===============================
-
-# Wait for a CodePipeline execution to complete.
-# Usage: wait_for_pipeline <pipeline-name> <execution-id>
-wait_for_pipeline() {
-    POLL_INTERVAL=30
-    local pipeline_name=$1
-    local execution_id=$2
-
-    log_info "Watching pipeline '${pipeline_name}' execution '${execution_id}'..."
-
-    while true; do
-        local status
-        status=$(aws codepipeline get-pipeline-execution \
-            --pipeline-name "${pipeline_name}" \
-            --pipeline-execution-id "${execution_id}" \
-            --query 'pipelineExecution.status' --output text 2>&1) || {
-            # V2 QUEUED pipelines have a propagation delay — execution may not
-            # be visible immediately after start-pipeline-execution returns.
-            log_info "Pipeline '${pipeline_name}' not yet visible — waiting ${POLL_INTERVAL}s..."
-            sleep "${POLL_INTERVAL}"
-            continue
-        }
-
-        case "${status}" in
-            Succeeded)
-                log_success "Pipeline '${pipeline_name}' succeeded."
-                return 0
-                ;;
-            Failed|Stopped|Cancelled)
-                log_error "Pipeline '${pipeline_name}' finished with status: ${status}"
-                return 1
-                ;;
-            InProgress|Stopping)
-                log_info "Pipeline '${pipeline_name}' status: ${status} — waiting ${POLL_INTERVAL}s..."
-                sleep "${POLL_INTERVAL}"
-                ;;
-            *)
-                log_error "Pipeline '${pipeline_name}' unexpected status: ${status}"
-                return 1
-                ;;
-        esac
-    done
-}
-
-# Discover pipelines matching a prefix that were started after a given timestamp.
-# Returns "pipeline-name:execution-id" lines for each match.
-# Usage: discover_pipelines <prefix> <after-timestamp>
-# TODO: Replace timestamp-based discovery with a unique identifier (e.g. source commit SHA
-# or a tag on the pipeline execution) to avoid potential collisions with parallel e2e runs.
-discover_pipelines() {
-    local prefix=$1
-    local after_ts=$2
-
-    aws codepipeline list-pipelines --query "pipelines[?starts_with(name, '${prefix}')].name" --output text | tr '\t' '\n' | grep "^${prefix}" | while read -r name; do
-        local exec_id
-        exec_id=$(aws codepipeline list-pipeline-executions \
-            --pipeline-name "${name}" --max-items 1 \
-            --query "pipelineExecutionSummaries[?lastUpdateTime>=\`${after_ts}\`].pipelineExecutionId | [0]" \
-            --output text)
-        if [ -n "${exec_id}" ] && [ "${exec_id}" != "None" ]; then
-            echo "${name}:${exec_id}"
-        fi
-    done
-}
-
-# Start a pipeline with a variable override and return the execution ID.
-# Usage: start_pipeline_with_variable <pipeline-name> <var-name> <var-value>
-start_pipeline_with_variable() {
-    local pipeline_name=$1
-    local var_name=$2
-    local var_value=$3
-
-    aws codepipeline start-pipeline-execution \
-        --name "${pipeline_name}" \
-        --variables "name=${var_name},value=${var_value}" \
-        --query 'pipelineExecutionId' --output text
-}
-
-## ===============================
 ## Teardown Mode
 ## ===============================
 
-# TODO(typeid): Teardown orchestration should migrate into the provisioner itself so that
-# it handles the full sequence (destroy MC infra, destroy RC infra, destroy pipeline resources).
-
 if [ "${TEARDOWN}" = true ]; then
-  log_phase "Teardown: Destroying MC Infrastructure"
+  log_phase "Teardown"
 
-  # 1. Discover MC pipelines and start each with IS_DESTROY=true
-  MC_PIPELINES=$(aws codepipeline list-pipelines \
-      --query "pipelines[?starts_with(name, 'mc-pipe-')].name" --output text | tr '\t' '\n' | grep '^mc-pipe-' || true)
+  # Destroy Management Cluster (management account, reverse of Step 4)
+  log_phase "Destroying Management Cluster"
+  export AWS_SHARED_CREDENTIALS_FILE="${MGMT_CREDS}"
+  export HASH="${MC_HASH}"
+  configure_state "${MC_HASH}" "mc"
+  export TF_VAR_container_image="${MC_CONTAINER_IMAGE}"
+  export TF_VAR_target_alias="e2e-rc-${MC_HASH}"
+  export TF_VAR_cluster_id="management-${MC_HASH}"
+  export CLUSTER_TYPE="management-cluster"
+  write_mc_tfvars
 
-  MC_FAILED=0
-  for mc_name in ${MC_PIPELINES}; do
-      log_info "Starting ${mc_name} with IS_DESTROY=true..."
-      mc_exec_id=$(start_pipeline_with_variable "${mc_name}" "IS_DESTROY" "true")
-      wait_for_pipeline "${mc_name}" "${mc_exec_id}" || MC_FAILED=$((MC_FAILED + 1))
-  done
-
-  if [ "${MC_FAILED}" -gt 0 ]; then
-      log_error "${MC_FAILED} MC pipeline(s) failed during teardown."
-      exit 1
+  # Read IoT cert/config from RC state (terraform destroy needs these vars).
+  # If state is missing (e.g. provisioning failed), create dummy files so
+  # terraform destroy can still proceed — the content doesn't matter for destroy.
+  _SAVED_CREDS="${AWS_SHARED_CREDENTIALS_FILE}"
+  export AWS_SHARED_CREDENTIALS_FILE="${REGIONAL_CREDS}"
+  if ! source "$REPO_ROOT/scripts/read-iot-state.sh" "$REGIONAL_ACCOUNT_ID" "mc-${MC_HASH}" "$AWS_REGION"; then
+    log_info "IoT state not found, creating dummy files for terraform destroy"
+    export TF_VAR_maestro_agent_cert_file=$(mktemp /tmp/agent-cert-XXXXXX.json)
+    export TF_VAR_maestro_agent_config_file=$(mktemp /tmp/agent-config-XXXXXX.json)
+    echo '{}' > "$TF_VAR_maestro_agent_cert_file"
+    echo '{}' > "$TF_VAR_maestro_agent_config_file"
   fi
+  export AWS_SHARED_CREDENTIALS_FILE="${_SAVED_CREDS}"
+  export TF_VAR_regional_aws_account_id="$REGIONAL_ACCOUNT_ID"
 
-  # 2. Discover RC pipelines and start each with IS_DESTROY=true
-  log_phase "Teardown: Destroying RC Infrastructure"
+  create_s3_bucket || { log_error "Failed to setup S3 backend"; exit 1; }
+  terraform_init "terraform/config/management-cluster" "false"
+  terraform destroy -auto-approve || { log_error "MC destruction failed"; exit 1; }
+  cd "$REPO_ROOT"
+  rm -f "${TF_VAR_maestro_agent_cert_file:-}" "${TF_VAR_maestro_agent_config_file:-}"
+  log_success "Management Cluster destroyed"
 
-  RC_PIPELINES=$(aws codepipeline list-pipelines \
-      --query "pipelines[?starts_with(name, 'rc-pipe-')].name" --output text | tr '\t' '\n' | grep '^rc-pipe-' || true)
+  # Cleanup IoT resources via terraform destroy (regional account, reverse of Step 2)
+  log_phase "Destroying IoT resources"
+  export AWS_SHARED_CREDENTIALS_FILE="${REGIONAL_CREDS}"
+  export HASH="${RC_HASH}"
+  configure_state "${RC_HASH}" "iot"
+  export TF_VAR_container_image="${RC_CONTAINER_IMAGE}"
+  export TF_VAR_target_alias="e2e-rc-${RC_HASH}"
 
-  RC_FAILED=0
-  for rc_name in ${RC_PIPELINES}; do
-      log_info "Starting ${rc_name} with IS_DESTROY=true..."
-      rc_exec_id=$(start_pipeline_with_variable "${rc_name}" "IS_DESTROY" "true")
-      wait_for_pipeline "${rc_name}" "${rc_exec_id}" || RC_FAILED=$((RC_FAILED + 1))
-  done
+  export AUTO_APPROVE=true
+  "$REPO_ROOT/scripts/cleanup-maestro-agent-iot.sh" "${MC_TFVARS}" \
+      || { log_error "Failed to cleanup IoT resources"; exit 1; }
+  log_success "IoT resources cleaned up"
 
-  if [ "${RC_FAILED}" -gt 0 ]; then
-      log_error "${RC_FAILED} RC pipeline(s) failed during teardown."
-      exit 1
-  fi
+  # Destroy Regional Cluster (regional account, reverse of Step 1)
+  log_phase "Destroying Regional Cluster"
+  export CLUSTER_TYPE="regional-cluster"
+  configure_state "${RC_HASH}" "rc"
+  create_s3_bucket || { log_error "Failed to setup S3 backend"; exit 1; }
+  terraform_init "terraform/config/regional-cluster" "true"
+  terraform destroy -auto-approve || { log_error "RC destruction failed"; exit 1; }
+  cd "$REPO_ROOT"
+  log_success "Regional Cluster destroyed"
 
-  # 3. Start provisioner with FORCE_DELETE_ALL_PIPELINES=true to remove pipeline resources
-  log_phase "Teardown: Destroying Pipeline Resources"
-
-  PROVISIONER_EXEC_ID=$(start_pipeline_with_variable "pipeline-provisioner" "FORCE_DELETE_ALL_PIPELINES" "true")
-  wait_for_pipeline "pipeline-provisioner" "${PROVISIONER_EXEC_ID}"
-
-  log_success "Teardown complete."
+  log_phase "Teardown complete"
   exit 0
 fi
 
@@ -271,50 +221,89 @@ fi
 ## Provisioning
 ## ===============================
 
-if [ "${BOOTSTRAP_CENTRAL}" = true ]; then
-    log_phase "Bootstrapping Central Account"
-    ./scripts/bootstrap-central-account.sh
-fi
+## ---- Step 1: RC Provisioning (regional account) ----
 
-# Record timestamp before starting so we can discover pipelines created after this point
-PROVISION_START=$(date -u +%Y-%m-%dT%H:%M:%S)
+log_phase "Step 1: Regional Cluster Provisioning"
+export AWS_SHARED_CREDENTIALS_FILE="${REGIONAL_CREDS}"
+export HASH="${RC_HASH}"
+configure_state "${RC_HASH}" "rc"
+export TF_VAR_container_image="${RC_CONTAINER_IMAGE}"
+export TF_VAR_target_alias="e2e-rc-${RC_HASH}"
+export CLUSTER_TYPE="regional-cluster"
+# Allow regional account to access the API
+export TF_VAR_bootstrap_accounts='["${REGIONAL_ACCOUNT_ID}"]'
 
-log_phase "Starting Pipeline Provisioner"
-PROVISIONER_EXEC_ID=$(aws codepipeline start-pipeline-execution \
-    --name pipeline-provisioner \
-    --query 'pipelineExecutionId' --output text)
-wait_for_pipeline "pipeline-provisioner" "${PROVISIONER_EXEC_ID}"
+create_s3_bucket || { log_error "Failed to setup S3 backend"; exit 1; }
+log_info "Container image: ${TF_VAR_container_image}"
+"$REPO_ROOT/scripts/dev/validate-argocd-config.sh" regional-cluster
+terraform_init "terraform/config/regional-cluster" "true"
+terraform apply -auto-approve
+API_URL=$(terraform output -raw api_test_command | grep -oE 'https://[^/]+')
+echo "API URL: ${API_URL}"
 
-log_phase "Watching RC/MC Pipelines"
+cd "$REPO_ROOT"
+"$REPO_ROOT/scripts/bootstrap-argocd.sh" regional-cluster \
+    || { log_error "RC ArgoCD bootstrap failed"; exit 1; }
+log_success "Regional Cluster provisioned"
 
-ALL_PIPELINES=$(
-    discover_pipelines "rc-pipe-" "${PROVISION_START}"
-    discover_pipelines "mc-pipe-" "${PROVISION_START}"
-)
+## ---- Step 2: IoT Regional (regional account) ----
 
-if [ -z "${ALL_PIPELINES}" ]; then
-    log_error "No RC/MC pipelines found after provisioner completed."
-    exit 1
-fi
+log_phase "Step 2: IoT Regional Provisioning"
+"$REPO_ROOT/scripts/bootstrap-state.sh" "${AWS_REGION}" \
+    || { log_error "Failed to bootstrap RC state bucket"; exit 1; }
+write_mc_tfvars
+configure_state "${RC_HASH}" "iot-rc"
+export AUTO_APPROVE=true
+export IOT_STATE_BUCKET="terraform-state-${REGIONAL_ACCOUNT_ID}"
+"$REPO_ROOT/scripts/provision-maestro-agent-iot-regional.sh" "${MC_TFVARS}" \
+    || { log_error "IoT regional provisioning failed"; exit 1; }
+log_success "IoT regional resources provisioned"
 
-FAILED=0
-while IFS=: read -r name exec_id; do
-    [ -z "${name}" ] && continue
-    wait_for_pipeline "${name}" "${exec_id}" || FAILED=$((FAILED + 1))
-done <<< "${ALL_PIPELINES}"
+## ---- Step 3: Read IoT state and provision MC (management account) ----
 
-if [ "${FAILED}" -gt 0 ]; then
-    log_error "${FAILED} pipeline(s) failed."
-    exit 1
-fi
+log_phase "Step 3: Read IoT State from RC"
+# Read IoT cert/config from RC state while still on regional creds
+source "$REPO_ROOT/scripts/read-iot-state.sh" "$REGIONAL_ACCOUNT_ID" "mc-${MC_HASH}" "$AWS_REGION"
+
+## ---- Step 4: MC Provisioning (management account) ----
+
+log_phase "Step 4: Management Cluster Provisioning"
+export AWS_SHARED_CREDENTIALS_FILE="${MGMT_CREDS}"
+export HASH="${MC_HASH}"
+configure_state "${MC_HASH}" "mc"
+export TF_VAR_container_image="${MC_CONTAINER_IMAGE}"
+export TF_VAR_target_alias="e2e-rc-${MC_HASH}"
+export TF_VAR_cluster_id="management-${MC_HASH}"
+export TF_VAR_regional_aws_account_id="$REGIONAL_ACCOUNT_ID"
+export CLUSTER_TYPE="management-cluster"
+
+create_s3_bucket || { log_error "Failed to setup S3 backend"; exit 1; }
+
+"$REPO_ROOT/scripts/dev/validate-argocd-config.sh" management-cluster
+
+terraform_init "terraform/config/management-cluster" "false"
+terraform apply -auto-approve
+cd "$REPO_ROOT"
+
+# Clean up temp cert files
+rm -f "${TF_VAR_maestro_agent_cert_file:-}" "${TF_VAR_maestro_agent_config_file:-}"
+
+"$REPO_ROOT/scripts/bootstrap-argocd.sh" management-cluster \
+    || { log_error "MC ArgoCD bootstrap failed"; exit 1; }
+log_success "Management Cluster provisioned"
+
+sleep 60
 
 ## ===============================
 ## Validation
 ## ===============================
 
-log_phase "Running Validation"
-unset AWS_SESSION_TOKEN
-export AWS_ACCESS_KEY_ID=$(< "${CREDS_DIR}/regional_access_key")
-export AWS_SECRET_ACCESS_KEY=$(< "${CREDS_DIR}/regional_secret_key")
-# TODO(typeid): we need to get the right API url and MC ID here.
-# ./ci/e2e-platform-api-test.sh
+## ---- Platform API Test (regional account) ----
+
+log_phase "Platform API Test"
+
+export AWS_SHARED_CREDENTIALS_FILE="${REGIONAL_CREDS}"
+
+"$REPO_ROOT/ci/e2e-platform-api-test.sh" "${API_URL}" "mc-${MC_HASH}"
+
+log_success "Platform API tests passed"

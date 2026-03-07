@@ -88,9 +88,12 @@ phases:
         fi
 
         if [ "${IS_DESTROY:-false}" == "true" ]; then
+            echo "⚠️ DESTRUCTION MODE ENABLED"
             make pipeline-destroy-regional
+            echo "✅ Regional cluster destroyed successfully."
         else
             make pipeline-provision-regional
+            echo "✅ Regional cluster provisioned successfully."
         fi
 
   post_build:

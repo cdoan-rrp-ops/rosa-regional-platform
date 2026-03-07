@@ -56,22 +56,22 @@ output "maestro_agent_helm_values" {
 
 ## Variables
 
-| Name                      | Description                     | Type          | Default                                | Required |
-| ------------------------- | ------------------------------- | ------------- | -------------------------------------- | -------- |
-| `cluster_id`              | Management cluster identifier   | `string`      | n/a                                    | yes      |
-| `regional_aws_account_id` | Regional cluster AWS account ID | `string`      | n/a                                    | yes      |
-| `eks_cluster_name`        | EKS cluster name                | `string`      | n/a                                    | yes      |
-| `mqtt_cert_secret_name`   | Override default secret path    | `string`      | `{cluster_id}/maestro/agent-mqtt-cert` | no       |
-| `mqtt_topic_prefix`       | MQTT topic prefix               | `string`      | `sources/maestro/consumers`            | no       |
-| `tags`                    | Additional resource tags        | `map(string)` | `{}`                                   | no       |
+| Name | Description | Type | Default | Required |
+|------|-------------|------|---------|----------|
+| `cluster_id` | Management cluster identifier | `string` | n/a | yes |
+| `regional_aws_account_id` | Regional cluster AWS account ID | `string` | n/a | yes |
+| `eks_cluster_name` | EKS cluster name | `string` | n/a | yes |
+| `mqtt_cert_secret_name` | Override default secret path | `string` | `{cluster_id}/maestro/agent-mqtt-cert` | no |
+| `mqtt_topic_prefix` | MQTT topic prefix | `string` | `sources/maestro/consumers` | no |
+| `tags` | Additional resource tags | `map(string)` | `{}` | no |
 
 ## Outputs
 
-| Name                                  | Description                    |
-| ------------------------------------- | ------------------------------ |
-| `maestro_agent_mqtt_cert_secret_name` | Secrets Manager secret name    |
-| `maestro_agent_role_arn`              | IAM role ARN for Pod Identity  |
-| `helm_values`                         | Complete Helm values structure |
+| Name | Description |
+|------|-------------|
+| `maestro_agent_mqtt_cert_secret_name` | Secrets Manager secret name |
+| `maestro_agent_role_arn` | IAM role ARN for Pod Identity |
+| `helm_values` | Complete Helm values structure |
 
 ## Resources Created
 
@@ -140,15 +140,12 @@ aws secretsmanager update-secret \
 ## Troubleshooting
 
 **Secret not found during Terraform apply**
-
 ```
 Error: reading Secrets Manager Secret: ResourceNotFoundException
 ```
-
 Create the secret first (see Prerequisites).
 
 **Agent cannot connect to IoT**
-
 - Verify `regional_aws_account_id` matches IoT Core account
 - Check IoT policy allows cross-account access from management account
 - Review CloudWatch logs in agent pod

@@ -135,11 +135,6 @@ resource "aws_codepipeline" "provisioner" {
   pipeline_type  = "V2"
   execution_mode = "QUEUED" # Prevent parallel executions that could cause lock conflicts
 
-  variable {
-    name          = "FORCE_DELETE_ALL_PIPELINES"
-    default_value = "false"
-  }
-
   artifact_store {
     location = aws_s3_bucket.pipeline_artifact.bucket
     type     = "S3"
@@ -217,13 +212,6 @@ resource "aws_codepipeline" "provisioner" {
 
       configuration = {
         ProjectName = aws_codebuild_project.provisioner.name
-        EnvironmentVariables = jsonencode([
-          {
-            name  = "FORCE_DELETE_ALL_PIPELINES"
-            value = "#{variables.FORCE_DELETE_ALL_PIPELINES}"
-            type  = "PLAINTEXT"
-          }
-        ])
       }
     }
   }

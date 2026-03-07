@@ -30,7 +30,7 @@ In this implementation we will **not** use Regional-Access Clusters. Instead, we
 ### Where is the global control plane located?
 
 - The purpose of the Central Control Plane is to run the Regional Provisioning Pipelines.
-- As of this writing, the decision has not been made about the technology stack and location of the Central Control Plane.
+- As of this writing, the decision has not been made about the technology stack and  location of the Central Control Plane.
 
 ### Where does the AuthZ service run?
 
@@ -51,6 +51,7 @@ In this implementation we will **not** use Regional-Access Clusters. Instead, we
 - The service will depend on AWS IAM, and will be impacted if IAM is unavailable
 - However, each region is independent and will continue operating even if any other regions are unavailable
 - As of this writing, there are no global services run by Red Hat that are critical for regional operation
+
 
 ### Is there a requirement to bring up a consoledot equivalent in another region within a set timeframe?
 

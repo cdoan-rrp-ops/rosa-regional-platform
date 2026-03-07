@@ -7,6 +7,7 @@
   "account_id": "018092638725",
   "region": "us-east-1",
   "alias": "mc01-us-east-1",
+  "region_deployment": "us-east-1",
   "cluster_id": "mc01-us-east-1",
   "regional_aws_account_id": "633630779107"
 }

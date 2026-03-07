@@ -145,12 +145,12 @@ retry_terraform_apply() {
     done
 }
 
-# Helper function: Resolve SSM parameter if value starts with "ssm://"
+# Helper function: Resolve SSM parameter if value starts with "ssm:"
 resolve_ssm_param() {
     local value="$1"
     local region="${2:-${AWS_REGION}}"  # Optional region parameter, defaults to AWS_REGION
-    if [[ "$value" == ssm://* ]]; then
-        local param_name="${value#ssm://}"
+    if [[ "$value" == ssm:* ]]; then
+        local param_name="${value#ssm:}"
         echo "Resolving SSM parameter: $param_name in region ${region}" >&2
         aws ssm get-parameter \
             --name "$param_name" \
@@ -189,14 +189,6 @@ destroy_pipeline() {
         return 1
     fi
 }
-
-# --- BEGIN TEMPORARY CI HACK (remove when e2e uses a dedicated config with per-cluster delete flags) ---
-# FORCE_DELETE_ALL_PIPELINES=true force-sets DELETE_FLAG=true for ALL clusters, bypassing
-# per-cluster config. This exists solely to let e2e teardown destroy everything without a
-# custom config. Passed as a CodePipeline variable from ci/e2e.sh.
-FORCE_DELETE_ALL_PIPELINES="${FORCE_DELETE_ALL_PIPELINES:-false}"
-echo "Force delete all pipelines: $FORCE_DELETE_ALL_PIPELINES"
-# --- END TEMPORARY CI HACK ---
 
 echo "Processing environment: $ENVIRONMENT"
 echo ""
@@ -255,10 +247,6 @@ for region_dir in deploy/${ENVIRONMENT}/*/; do
         ENABLE_BASTION=$(jq -r '.enable_bastion // false' "$REGIONAL_CONFIG")
         DELETE_FLAG=$(jq -r '.delete // false' "$REGIONAL_CONFIG")
 
-        # TEMPORARY CI HACK (see top of file)
-        # Sets DELETE_FLAG to true if FORCE_DELETE_ALL_PIPELINES is true
-        [ "$FORCE_DELETE_ALL_PIPELINES" == "true" ] && DELETE_FLAG="true"
-
         echo "  AWS Region: $AWS_REGION"
         [ -n "$TARGET_ACCOUNT_ID" ] && echo "  Target Account ID: $TARGET_ACCOUNT_ID"
         [ -n "$TARGET_ALIAS" ] && echo "  Target Alias: $TARGET_ALIAS"
@@ -268,7 +256,7 @@ for region_dir in deploy/${ENVIRONMENT}/*/; do
         # Validate TARGET_ACCOUNT_ID before using it
         if [[ -z "$TARGET_ACCOUNT_ID" ]]; then
             echo "❌ ERROR: TARGET_ACCOUNT_ID (account_id) must be provided for region ${AWS_REGION}"
-            echo "   Set account_id in your regional config (either direct account ID or ssm:///path/to/param)"
+            echo "   Set account_id in your regional config (either direct account ID or ssm:/path/to/param)"
             exit 1
         fi
 
@@ -366,10 +354,6 @@ for region_dir in deploy/${ENVIRONMENT}/*/; do
             ENABLE_BASTION=$(jq -r '.enable_bastion // false' "$mc_config")
             DELETE_FLAG=$(jq -r '.delete // false' "$mc_config")
 
-            # TEMPORARY CI HACK (see top of file)
-            # Sets DELETE_FLAG to true if FORCE_DELETE_ALL_PIPELINES is true
-            [ "$FORCE_DELETE_ALL_PIPELINES" == "true" ] && DELETE_FLAG="true"
-
             # Use TARGET_ALIAS as cluster_id default if not specified
             [ -z "$CLUSTER_ID" ] && CLUSTER_ID="${TARGET_ALIAS}"
 
@@ -379,7 +363,7 @@ for region_dir in deploy/${ENVIRONMENT}/*/; do
             # Validate that REGIONAL_AWS_ACCOUNT_ID is non-empty
             if [[ -z "$REGIONAL_AWS_ACCOUNT_ID" ]]; then
                 echo "❌ ERROR: REGIONAL_AWS_ACCOUNT_ID must be provided for region ${AWS_REGION}"
-                echo "   Set regional_aws_account_id in your management cluster config (either direct account ID or ssm:///path/to/param)"
+                echo "   Set regional_aws_account_id in your management cluster config (either direct account ID or ssm:/path/to/param)"
                 exit 1
             fi
 
@@ -392,7 +376,7 @@ for region_dir in deploy/${ENVIRONMENT}/*/; do
             # Validate TARGET_ACCOUNT_ID before using it
             if [[ -z "$TARGET_ACCOUNT_ID" ]]; then
                 echo "❌ ERROR: TARGET_ACCOUNT_ID (account_id) must be provided for management cluster ${CLUSTER_NAME}"
-                echo "   Set account_id in your management cluster config (either direct account ID or ssm:///path/to/param)"
+                echo "   Set account_id in your management cluster config (either direct account ID or ssm:/path/to/param)"
                 exit 1
             fi
 

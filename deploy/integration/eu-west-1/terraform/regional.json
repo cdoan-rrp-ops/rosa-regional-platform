@@ -4,10 +4,11 @@
   "service_phase": "dev",
   "cost_center": "000",
   "environment": "integration",
-  "account_id": "ssm:///infra/integration/eu-west-1/account_id",
+  "account_id": "REMOVED",
   "region": "eu-west-1",
   "alias": "regional-eu-west-1",
+  "region_deployment": "eu-west-1",
   "management_cluster_account_ids": [
-    "ssm:///infra/integration/eu-west-1/mc01/account_id"
+    "REMOVED"
   ]
 }

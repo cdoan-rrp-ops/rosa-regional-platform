@@ -37,14 +37,14 @@ OPTIONS:
     -h, --help          Show this help message
 
 ENVIRONMENT VARIABLES:
-    GITHUB_REPOSITORY   GitHub repository in owner/name format (e.g., 'openshift-online/rosa-regional-platform')
+    GITHUB_REPOSITORY   GitHub repository in owner/name format (e.g., 'theautoroboto/rosa-regional-platform')
     GITHUB_BRANCH       Git branch to track (default: main)
     TARGET_ENVIRONMENT  Environment to monitor (default: staging)
     AWS_PROFILE         AWS CLI profile to use
 
 EXAMPLES:
     # With environment variables (recommended)
-    GITHUB_REPOSITORY=openshift-online/rosa-regional-platform GITHUB_BRANCH=bugfix-environment TARGET_ENVIRONMENT=brian $0
+    GITHUB_REPOSITORY=theautoroboto/rosa-regional-platform GITHUB_BRANCH=bugfix-environment TARGET_ENVIRONMENT=brian $0
 
     # With command-line arguments
     $0 custom-org/rosa-regional-platform feature-branch staging
@@ -132,7 +132,7 @@ TARGET_ENVIRONMENT="${TARGET_ENVIRONMENT:-staging}"
 # Validate repository format (must be owner/name)
 if [[ ! "$GITHUB_REPOSITORY" =~ ^[^/]+/[^/]+$ ]]; then
     echo "❌ Error: GITHUB_REPOSITORY must be in 'owner/name' format"
-    echo "   Example: openshift-online/rosa-regional-platform"
+    echo "   Example: theautoroboto/rosa-regional-platform"
     exit 1
 fi
 

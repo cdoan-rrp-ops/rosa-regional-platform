@@ -1,35 +1,48 @@
-# Provision a New Central Pipeline
+# Complete Guide: Provision a New Central Pipeline
 
-Set up a central pipeline that provisions Regional and Management Clusters with ArgoCD and Maestro connectivity.
+This comprehensive guide walks through all steps to provision a new central pipeline in the ROSA Regional Platform. Follow these steps in order to set up a central pipeline that will provision both Regional and Management Clusters with full ArgoCD configuration and Maestro connectivity.
 
 ---
 
-## 1. Prerequisites
+## 1. Pre-Flight Checklist
 
-### Required tools
+Before starting, ensure your environment is properly configured.
+
+### Required Tools
+
+Verify all tools are installed and accessible:
 
 ```bash
+# Check tool versions
 aws --version
 terraform --version
-python --version
-jq --version
+python --version  # or python3 --version
+jq
 ```
+
+You also must be able to access the `Central` account AWS console.
+
+For us, you can go to `rover > AWS IAAS > 811....-rrp-admin > login > then switch` by account id to your `Central` account
 
 ### 1.1 Required AWS accounts
 
-Three accounts are needed:
+To provision a regional and management cluster, you require three AWS accounts:
+* one account for the `Central` configuration
+* one account for the `Regional` Cluster
+* one account for the `Management` Cluster
 
-- **Central** — hosts the CodePipeline infrastructure
-- **Regional** — runs the Regional Cluster (EKS)
-- **Management** — runs the Management Cluster (EKS)
+Ensure you have access to the designated Central account via environment variables or ideally AWS profiles.
 
-The Regional and Management accounts must allow assume-role from Central (see 1.2).
+The 2 accounts designated for the `Regional` Cluster and `Management` Cluster require additional assume-role configuration from the `Central` if it not already able to assume-role.
 
-### 1.2 Enable assume-role
+### 1.2 Enable Assume-Role
 
-Add the Central account to the `OrganizationAccountAccessRole` trust policy in both the Regional and Management accounts:
+Add the Central AWS account number to the trust policy of `OrganizationAccountAccessRole` in the 2 regional and management accounts.
+
+**: Using jq to programmatically add the account:**
 
 ```bash
+# Set variables
 CENTRAL_ACCOUNT_ID="123456789012"
 ROLE_NAME="OrganizationAccountAccessRole"
 
@@ -39,67 +52,96 @@ aws iam get-role --role-name $ROLE_NAME --query 'Role.AssumeRolePolicyDocument' 
   '.Statement[0].Principal.AWS |= (if type == "array" then (. + [$account] | unique) else [., $account] | unique end)' \
   > /tmp/trust-policy-updated.json
 
+# Update the role trust policy
 aws iam update-assume-role-policy \
   --role-name $ROLE_NAME \
   --policy-document file:///tmp/trust-policy-updated.json
 
-# Repeat for the Management account (switch credentials first)
+# Repeat the same steps for the Management Cluster account
+# (Switch AWS profile/credentials to the Management Cluster account first)
 ```
 
-## 2. Configure the Region
+## 2. Define a new Sector/Region Configuration
 
-> **Skip this step** if reusing an existing environment/region configuration.
+> **Note:** In case you are deploying clusters based on existing argocd configuration, you can skip this step.
+Example: You want to spin up a development cluster and re-use the existing configuration for `env = integration` and `region = us-east-1`.
 
-### 2.1 Store account IDs in SSM
+### 2.1 Define a sector configuration
 
-Push the Regional and Management account IDs to SSM Parameter Store in the Central account. The default config uses the resolver URI `ssm:///infra/<environment>/<region>/account_id` to look up account IDs at runtime; the actual SSM parameter name stored in Parameter Store is `/infra/<environment>/<region>/account_id` (the `ssm://` prefix is stripped by the resolver).
+Edit the `config.yaml` and add a new sector configuration like below. 
 
-```bash
-ENV=my-env
-REGION=us-east-1
-RC_ACCOUNT_ID=123456789012    # Regional Cluster account
-MC_ACCOUNT_ID=987654321098    # Management Cluster account
+New sectors are defined under the `sectors` object. The sector `name` is abitrary. The `environment` parameter is important because it denotes the association of a central account to a single pipeline that manages that central account.
+There is a pipeline to manage a central account. Each region will have its own pipeline.
 
-aws ssm put-parameter --name "/infra/${ENV}/${REGION}/account_id" \
-  --value "$RC_ACCOUNT_ID" --type String
-aws ssm put-parameter --name "/infra/${ENV}/${REGION}/mc01/account_id" \
-  --value "$MC_ACCOUNT_ID" --type String
-```
-
-### 2.2 Add the environment to config.yaml
-
-Edit `config.yaml`. See the header comments in that file for the full schema reference.
+In the example snippet below, an arbitary sector name `brian-testing` is defined, and associated to a `brian-central` environment. A single central account will be associated to the `brian-central` environment. If there are multiple `brian-central` environments defined, there will be conflicts.
 
 ```yaml
-environments:
-  my-env:
-    region_deployments:
-      us-east-1:
-        management_clusters:
-          mc01: {}
-```
-
-This inherits all defaults (terraform_vars, values, SSM account_id patterns). Override only what differs — e.g. to enable the bastion:
-
-```yaml
-environments:
-  my-env:
+sectors:
+  # ... existing entries ...
+  - name: "brian-testing"
+    environment: "brian-central"
     terraform_vars:
-      enable_bastion: true
-    region_deployments:
-      us-east-1:
-        management_clusters:
-          mc01: {}
+      app_code: "infra"
+      service_phase: "dev"
+      cost_center: "000"
+      environment: "{{ environment }}"
+    values:
+      management-cluster:
+        hypershift:
+          oidcStorageS3Bucket:
+            name: "hypershift-mc-{{ aws_region }}"
+            region: "{{ aws_region }}"
+          externalDns:
+            domain: "dev.{{ aws_region }}.rosa.example.com"
 ```
 
-### 2.3 Render and commit
+### 2.2 Define a region configuration
+
+Edit `config.yaml` and add a region configuration and associate to a sector.
+* There can be multiple regions to an `environment`
+* There can be multiple regions to a `sector`
+
+```yaml
+region_deployments:
+  # ... existing entries ...
+  - name: "us-east-1"
+    aws_region: "us-east-1"
+    sector: "brian-testing"
+    account_id: "<Regional account>"
+    terraform_vars:
+      account_id: "{{ account_id }}"
+      region: "{{ aws_region }}"
+      alias: "regional-{{region_deployment}}"
+      region_deployment: "{{ region_deployment }}"
+      enable_bastion: true
+    management_clusters:
+      - cluster_id: "mc01-{{ region_deployment }}"
+        account_id: "<Management Account>"
+```
+
+> NOTE: If you want to enable the bastion module, add the `enable_bastion: true` to your region deployment and re-render.
+
+### 2.3 Generate Rendered Configurations
+
+Run the rendering script to generate the configurations to be deployed by the pipeline:
 
 ```bash
 ./scripts/render.py
-ls deploy/<environment>/<region>/    # verify argocd/ and terraform/ dirs exist
+```
 
+**Verify rendered files were created:**
+
+```bash
+ls -la deploy/<sector>/<region>/  # Replace with your environment/name
+```
+
+You should see `argocd/` and `terraform/` subdirectories with generated configs.
+
+### 2.4 Commit and Push Changes
+
+```bash
 git add config.yaml deploy/
-git commit -m "Add <environment>/<region> configuration"
+git commit -m "Add <region> region configuration"
 git push origin <your-branch>
 ```
 
@@ -107,64 +149,99 @@ git push origin <your-branch>
 
 ## 3. Bootstrap the Central Pipeline
 
-Switch to your Central AWS profile and create the CodePipelines.
+This step will create the codepipelines in the `Central` account. Switch to your `Central` AWS profile and run the commands below to create the pipelines.
 
-### 3.1 Run the bootstrap script
+### 3.1 Execute central pipeline bootstrap
 
 ```bash
+# Authenticate with central account (choose your preferred method)
 export AWS_PROFILE=<central-profile>
+# OR: aws configure set profile <regional-profile>
+# OR: use your SSO/assume role method
 
-GITHUB_REPOSITORY=<org>/rosa-regional-platform \
-GITHUB_BRANCH=<branch> \
-TARGET_ENVIRONMENT=<environment> \
-./scripts/bootstrap-central-account.sh
+# Bootstrap the pipeline
+GITHUB_REPOSITORY=<ORG>/rosa-regional-platform GITHUB_BRANCH=<BRANCH> TARGET_ENVIRONMENT=<SECTOR> ./scripts/bootstrap-central-account.sh
+
+# Example
+GITHUB_REPOSITORY=cdoan1/rosa-regional-platform GITHUB_BRANCH=process-doc TARGET_ENVIRONMENT=cdoan-central ./scripts/bootstrap-central-account.sh
+
 ```
 
-### 3.2 Accept the CodeStar connection
+### 3.2 Accept the Codestar connection
 
-The bootstrap completes but the pipeline blocks until you authorize the GitHub connection:
-
-1. Open the [AWS CodeStar Connections console](https://console.aws.amazon.com/codesuite/settings/connections) in the Central account
-2. Find the **Pending** connection and click **Update pending connection**
-3. Authorize with GitHub
-
-Then retrigger the `pipeline-provisioner` pipeline in CodePipeline. Once it succeeds, `rc-pipe-*` and `mc-pipe-*` pipelines are created automatically.
-
-### 3.3 Trigger pipelines via CLI (optional)
+The tf script will run to completion with the last message like below, but the pipeline will have an error and block.
 
 ```bash
-# List available pipelines
+===================================================
+✅ Bootstrap Complete!
+===================================================
+
+🔗 GitHub Connection Authorization:
+   1. Open AWS Console: https://console.aws.amazon.com/codesuite/settings/connections
+   2. Find connections in PENDING state
+   3. Click 'Update pending connection' and authorize with GitHub
+```
+
+You must accept the CodeStar connection to establish oauth between github and the pipeline, using the AWS Console.
+
+Log into the Central AWS Account console, by way of the [AWS SSO page](https://auth.redhat.com/auth/realms/EmployeeIDP/protocol/saml/clients/itaws).  
+
+`Developer Tools` > `Settings` > `Connections` > `Accept the pending connection`
+
+Since the pipeline was deployed before the connection was accepted, you must retrigger the `CodePipeline` in the aws console.
+
+The `pipeline-provisioner` is the first pipeline. Once this completes successfully, you should see the creation of the `rc-pipe-XXX` and `mc-pipe-XXX` pipelines.
+
+At any point, you can retrigger a pipeline by going to the CodePipeline > Pipeline view select a pipeline like `pipeline-provisioner` and click `Release change` button. If you branch has new changes, the pipeline will fetch the latest SHA and run.
+
+### 3.3 Pipeline can be triggered from the aws cli
+
+
+```bash
+aws codepipeline start-pipeline-execution --name MyFirstPipeline --variables name=var1,value=1 name=var2,value=2
+```
+
+Example trigger RC pipeline
+
+```
+# from the central account, get the list of pipelines available
 aws codepipeline list-pipelines \
   --query 'pipelines[*].[name,created,updated]' \
   --output table
+--------------------------------------------------------------------------------------------------
+|                                          ListPipelines                                         |
++----------------------+------------------------------------+------------------------------------+
+|  mc-pipe-fa50acc785e1|  2026-02-19T12:00:21.529000-06:00  |  2026-02-19T12:00:21.529000-06:00  |
+|  pipeline-provisioner|  2026-02-19T11:09:03.855000-06:00  |  2026-02-19T11:09:03.855000-06:00  |
+|  rc-pipe-1f570faa867c|  2026-02-19T11:59:06.179000-06:00  |  2026-02-19T11:59:06.179000-06:00  |
++----------------------+------------------------------------+------------------------------------+
 
-# Trigger a specific pipeline (fetches latest commit)
-aws codepipeline start-pipeline-execution --name rc-pipe-<hash>
+# trigger the pipeline. this trigger will referesh the source repo to the latest commit
+aws codepipeline start-pipeline-execution --name rc-pipe-1f570faa867c
+{
+    "pipelineExecutionId": "f54ab63b-f317-4300-9f1a-a371cc92e55f"
+}
 ```
 
-### 3.4 Connect to the bastion (optional)
+> NOTE: In `rc-pipe-1f570faa867c`, `1f570faa867c` is just a hash of static string
 
-Requires `enable_bastion: true` in config. Switch to the Regional account:
+### 3.4 Connect to the bastion (Optional)
+
+If you enabled the bastion, you can verify the state of the `Regional` cluster directly.
 
 ```bash
-export AWS_PROFILE=<regional-profile>
+# switch to your regional account
+export AWS_PROFILE=rrp-chris-regional_cluster
 
 CLUSTER=$(aws ecs list-clusters | jq -r '.clusterArns[]' | cut -d'/' -f2 | grep bastion)
 TASK_ID=$(aws ecs list-tasks --cluster $CLUSTER --query 'taskArns[0]' --output text | awk -F'/' '{print $NF}')
 aws ecs execute-command --cluster $CLUSTER --task $TASK_ID --container bastion --interactive --command '/bin/bash'
 ```
 
-### 3.5 Verify ArgoCD applications
-
-From the bastion:
+### 3.5 From the bastion, verify Applcations
 
 ```bash
 kubectl get applications -A
-```
-
-Expected output:
-
-```
 NAMESPACE   NAME                SYNC STATUS   HEALTH STATUS
 argocd      argocd              Synced        Healthy
 argocd      hyperfleet-system   Synced        Healthy
@@ -173,61 +250,90 @@ argocd      platform-api        Synced        Healthy
 argocd      root                Synced        Healthy
 ```
 
-### 3.6 Verify the Platform API
+### 3.5 Verify the Platform API
 
-From the Central account, extract the API Gateway endpoint from terraform output:
+We need to connect to s3 to get the tf output.
 
 ```bash
-export AWS_PROFILE=<central-profile>
+export AWS_PRIFILE=central_account
+
+# navigate to the tf template
 cd terraform/config/pipeline-regional-cluster/
 
-terraform init -reconfigure \
-  -backend-config="bucket=terraform-state-<CENTRAL_ACCOUNT_ID>" \
-  -backend-config="key=regional-cluster/regional-<region>.tfstate" \
-  -backend-config="region=<region>"
+CENTRAL_ACCOUNT=724701986097
 
+terraform init -reconfigure \
+  -backend-config="bucket=terraform-state-$CENTRAL_ACCOUNT" \
+  -backend-config="key=regional-cluster/regional-us-east-2.tfstate" \
+  -backend-config="region=us-east-2"
+
+# extract the test command with the api gateway endpoint from output
 terraform output -raw api_test_command
-# Then run the output command, e.g.:
-# awscurl --service execute-api --region us-east-2 https://<id>.execute-api.<region>.amazonaws.com/prod/v0/live
+awscurl --service execute-api --region us-east-2 \
+  https://kycvifaakj.execute-api.us-east-2.amazonaws.com/prod/v0/live
+
+# query the platform api status
+awscurl --service execute-api --region us-east-2 \
+  https://kycvifaakj.execute-api.us-east-2.amazonaws.com/prod/v0/live
+{"status":"ok"}
 ```
 
-> **Note:** `awscurl` must be run from the Regional account, which is the only account authorized by default.
+> NOTE: to awscurl any of the api endpoints, you need to be logged into the regional account to run. As by default, we have only automatically authz the regional account id to have priviledge access.
 
 ## 4. Verify Maestro Connectivity
 
-From the Regional account, verify IoT certificates are active:
+Maestro uses AWS IoT Core for secure MQTT communication between Regional and Management Clusters. This requires a two-account certificate exchange process.
+
+
+**What this creates:**
+- Kubernetes secret containing IoT certificate and endpoint
+- Configuration for Maestro agent to connect to regional IoT endpoint
 
 ```bash
-export AWS_PROFILE=<regional-profile>
+export AWS_PROFILE=rrp-chris-regional_cluster
 
+# In regional account - verify IoT endpoint
 aws iot describe-endpoint --endpoint-type iot:Data-ATS
+
+# Check certificate is active
 aws iot list-certificates | jq -r '.certificates[].status'
+ACTIVE
+ACTIVE
+ACTIVE
 ```
 
-## 5. Verify Management Cluster
+## 5. Management Cluster Provisioning
 
-From the Central account:
+### 5.1 Verify Management Cluster Provisioning
 
 ```bash
-export AWS_PROFILE=<central-profile>
+# Authenticate with management account (choose your preferred method)
+export AWS_PROFILE=central
 
-# Check tfstate exists
-aws s3 ls terraform-state-<CENTRAL_ACCOUNT_ID>/management-cluster/
+aws s3 ls terraform-state-724701986097/management-cluster/
+2026-02-19 16:14:10     168127 mc01-us-east-2.tfstate
 
-# Connect to MC bastion (switch to Management account)
-export AWS_PROFILE=<management-profile>
+CENTRAL=724701986097
+terraform init -reconfigure \
+  -backend-config="bucket=terraform-state-$CENTRAL" \
+  -backend-config="key=management-cluster/mc01-us-east-2.tfstate" \
+  -backend-config="region=us-east-2"
 
+# Connect to the bastion for the management cluster
 CLUSTER=$(aws ecs list-clusters | jq -r '.clusterArns[]' | cut -d'/' -f2 | grep bastion)
 TASK_ID=$(aws ecs list-tasks --cluster $CLUSTER --query 'taskArns[0]' --output text | awk -F'/' '{print $NF}')
 aws ecs execute-command --cluster $CLUSTER --task $TASK_ID --container bastion --interactive --command '/bin/bash'
 
-# Verify MC applications
-kubectl get applications -A
-```
+# if the TASK_ID is empty, the fargate task has not run, you can get this from the tf output above
+aws ecs run-task \
+  --cluster mc01-us-east-2-bastion \
+  --task-definition mc01-us-east-2-bastion \
+  --launch-type FARGATE \
+  --enable-execute-command \
+  --network-configuration 'awsvpcConfiguration={subnets=[subnet-064ea8d2f30df1dac,subnet-04a037bfeefaf359e,subnet-0d0e765fc2f37fd7e],securityGroups=[sg-0d62c0eea4129e0f1],assignPublicIp=DISABLED}'
 
-Expected output:
-
-```
+# query the applications on the management cluster
+oc get applications -A
 NAMESPACE   NAME            SYNC STATUS   HEALTH STATUS
 argocd      argocd          Synced        Healthy
 argocd      cert-manager    Synced        Healthy
@@ -237,5 +343,4 @@ argocd      root            Synced        Healthy
 ```
 
 ---
-
-For manual post-pipeline steps, see [Consumer Registration & Verification](https://github.com/openshift-online/rosa-regional-platform/blob/main/docs/full-region-provisioning.md#6-consumer-registration--verification).
+The pipeline process current ends here.  For the remaining manual directions, follow [Consumer Registration & Verification](https://github.com/openshift-online/rosa-regional-platform/blob/main/docs/full-region-provisioning.md#6-consumer-registration--verification)

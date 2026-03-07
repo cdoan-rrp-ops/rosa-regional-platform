@@ -42,34 +42,34 @@ module "maestro_infrastructure" {
 
 ## Variables
 
-| Name                            | Description                        | Type           | Default          | Required |
-| ------------------------------- | ---------------------------------- | -------------- | ---------------- | -------- |
-| `resource_name_base`            | Base name for resource naming      | `string`       | n/a              | yes      |
-| `vpc_id`                        | VPC ID for RDS and security groups | `string`       | n/a              | yes      |
-| `private_subnets`               | Private subnet IDs for RDS         | `list(string)` | n/a              | yes      |
-| `eks_cluster_name`              | EKS cluster name for Pod Identity  | `string`       | n/a              | yes      |
-| `eks_cluster_security_group_id` | EKS security group for RDS access  | `string`       | n/a              | yes      |
-| `management_cluster_count`      | Number of management clusters      | `number`       | n/a              | yes      |
-| `management_cluster_ids`        | List of management cluster IDs     | `list(string)` | n/a              | yes      |
-| `db_instance_class`             | RDS instance class                 | `string`       | `"db.t4g.micro"` | no       |
-| `db_allocated_storage`          | RDS storage in GB                  | `number`       | `20`             | no       |
-| `db_multi_az`                   | Enable Multi-AZ deployment         | `bool`         | `false`          | no       |
-| `db_deletion_protection`        | Enable deletion protection         | `bool`         | `false`          | no       |
-| `tags`                          | Additional resource tags           | `map(string)`  | `{}`             | no       |
+| Name | Description | Type | Default | Required |
+|------|-------------|------|---------|----------|
+| `resource_name_base` | Base name for resource naming | `string` | n/a | yes |
+| `vpc_id` | VPC ID for RDS and security groups | `string` | n/a | yes |
+| `private_subnets` | Private subnet IDs for RDS | `list(string)` | n/a | yes |
+| `eks_cluster_name` | EKS cluster name for Pod Identity | `string` | n/a | yes |
+| `eks_cluster_security_group_id` | EKS security group for RDS access | `string` | n/a | yes |
+| `management_cluster_count` | Number of management clusters | `number` | n/a | yes |
+| `management_cluster_ids` | List of management cluster IDs | `list(string)` | n/a | yes |
+| `db_instance_class` | RDS instance class | `string` | `"db.t4g.micro"` | no |
+| `db_allocated_storage` | RDS storage in GB | `number` | `20` | no |
+| `db_multi_az` | Enable Multi-AZ deployment | `bool` | `false` | no |
+| `db_deletion_protection` | Enable deletion protection | `bool` | `false` | no |
+| `tags` | Additional resource tags | `map(string)` | `{}` | no |
 
 ## Outputs
 
-| Name                                   | Description                                 |
-| -------------------------------------- | ------------------------------------------- |
-| `iot_mqtt_endpoint`                    | AWS IoT Core MQTT endpoint                  |
+| Name | Description |
+|------|-------------|
+| `iot_mqtt_endpoint` | AWS IoT Core MQTT endpoint |
 | `maestro_server_mqtt_cert_secret_name` | Secrets Manager secret for server MQTT cert |
-| `maestro_agent_certificates`           | Map of agent certificates by cluster ID     |
-| `rds_address`                          | RDS PostgreSQL endpoint                     |
-| `rds_port`                             | RDS PostgreSQL port                         |
-| `maestro_db_credentials_secret_name`   | Secrets Manager secret for DB credentials   |
-| `maestro_server_role_arn`              | IAM role ARN for Maestro Server             |
-| `external_secrets_role_arn`            | IAM role ARN for External Secrets Operator  |
-| `maestro_configuration_summary`        | Complete Helm configuration summary         |
+| `maestro_agent_certificates` | Map of agent certificates by cluster ID |
+| `rds_address` | RDS PostgreSQL endpoint |
+| `rds_port` | RDS PostgreSQL port |
+| `maestro_db_credentials_secret_name` | Secrets Manager secret for DB credentials |
+| `maestro_server_role_arn` | IAM role ARN for Maestro Server |
+| `external_secrets_role_arn` | IAM role ARN for External Secrets Operator |
+| `maestro_configuration_summary` | Complete Helm configuration summary |
 
 ## Resources Created
 

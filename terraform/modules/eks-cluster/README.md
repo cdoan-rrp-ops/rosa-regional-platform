@@ -14,14 +14,12 @@ Creates private EKS clusters with security-first configuration and standardized 
 ## Security & Scalability Enhancements
 
 ### Network Security
-
 - **KMS Encryption**: Kubernetes secrets encrypted at rest using customer-managed keys
 - **Dedicated Security Groups**: VPC endpoints use isolated security groups (port 443 from VPC CIDR only)
 - **Restricted Egress**: Cluster egress limited to HTTPS for container registries and VPC internal traffic
 - **Auto Mode Authentication**: EKS authentication configured for API_AND_CONFIG_MAP mode
 
 ### High Availability Network Architecture
-
 - **Multi-AZ NAT Deployment**: One NAT Gateway per availability zone eliminates single points of failure
 - **Per-AZ Route Tables**: Traffic distribution across availability zones for fault isolation
 - **Improved Resilience**: AZ outages don't impact other zones' external connectivity
@@ -31,7 +29,6 @@ Creates private EKS clusters with security-first configuration and standardized 
 All resources are automatically named using the pattern: `{cluster_type}-{random_suffix}`
 
 **Examples:**
-
 - EKS Cluster: `management-x8k2`
 - VPC: `management-x8k2-vpc`
 - Node Group: `management-x8k2-main-node-group`
@@ -103,37 +100,37 @@ module "regional_cluster" {
 
 ## Variables
 
-| Name                            | Description                                         | Type           | Default                                                        | Required |
-| ------------------------------- | --------------------------------------------------- | -------------- | -------------------------------------------------------------- | -------- |
-| `cluster_type`                  | Type of cluster: `regional` or `management`         | `string`       | n/a                                                            | yes      |
-| `cluster_version`               | Kubernetes version                                  | `string`       | `"1.34"`                                                       | no       |
-| `vpc_cidr`                      | VPC CIDR block                                      | `string`       | `"10.0.0.0/16"`                                                | no       |
-| `availability_zones`            | List of availability zones (auto-detected if empty) | `list(string)` | `[]`                                                           | no       |
-| `private_subnet_cidrs`          | CIDR blocks for private subnets                     | `list(string)` | `["10.0.1.0/24", "10.0.2.0/24", "10.0.3.0/24"]`                | no       |
-| `public_subnet_cidrs`           | CIDR blocks for public subnets                      | `list(string)` | `["10.0.101.0/24", "10.0.102.0/24", "10.0.103.0/24"]`          | no       |
-| `node_instance_types`           | EC2 instance types for nodes                        | `list(string)` | `["t3.medium", "t3a.medium"]`                                  | no       |
-| `node_group_desired_size`       | Desired number of nodes                             | `number`       | `2`                                                            | no       |
-| `node_group_min_size`           | Minimum number of nodes                             | `number`       | `1`                                                            | no       |
-| `node_group_max_size`           | Maximum number of nodes                             | `number`       | `4`                                                            | no       |
-| `node_disk_size`                | EBS volume size for nodes (GiB)                     | `number`       | `20`                                                           | no       |
-| `enable_pod_security_standards` | Enable Pod Security Standards                       | `bool`         | `true`                                                         | no       |
-| `bootstrap_enabled`             | Enable ArgoCD bootstrap for GitOps management       | `bool`         | `true`                                                         | no       |
-| `argocd_namespace`              | Kubernetes namespace for ArgoCD installation        | `string`       | `"argocd"`                                                     | no       |
-| `argocd_chart_version`          | ArgoCD Helm chart version                           | `string`       | `"9.3.0"`                                                      | no       |
-| `bootstrap_repository_url`      | Git repository URL for ArgoCD configuration         | `string`       | `"https://github.com/openshift-online/rosa-regional-platform"` | no       |
-| `bootstrap_repository_branch`   | Git branch to track                                 | `string`       | `"main"`                                                       | no       |
+| Name | Description | Type | Default | Required |
+|------|-------------|------|---------|----------|
+| `cluster_type` | Type of cluster: `regional` or `management` | `string` | n/a | yes |
+| `cluster_version` | Kubernetes version | `string` | `"1.34"` | no |
+| `vpc_cidr` | VPC CIDR block | `string` | `"10.0.0.0/16"` | no |
+| `availability_zones` | List of availability zones (auto-detected if empty) | `list(string)` | `[]` | no |
+| `private_subnet_cidrs` | CIDR blocks for private subnets | `list(string)` | `["10.0.1.0/24", "10.0.2.0/24", "10.0.3.0/24"]` | no |
+| `public_subnet_cidrs` | CIDR blocks for public subnets | `list(string)` | `["10.0.101.0/24", "10.0.102.0/24", "10.0.103.0/24"]` | no |
+| `node_instance_types` | EC2 instance types for nodes | `list(string)` | `["t3.medium", "t3a.medium"]` | no |
+| `node_group_desired_size` | Desired number of nodes | `number` | `2` | no |
+| `node_group_min_size` | Minimum number of nodes | `number` | `1` | no |
+| `node_group_max_size` | Maximum number of nodes | `number` | `4` | no |
+| `node_disk_size` | EBS volume size for nodes (GiB) | `number` | `20` | no |
+| `enable_pod_security_standards` | Enable Pod Security Standards | `bool` | `true` | no |
+| `bootstrap_enabled` | Enable ArgoCD bootstrap for GitOps management | `bool` | `true` | no |
+| `argocd_namespace` | Kubernetes namespace for ArgoCD installation | `string` | `"argocd"` | no |
+| `argocd_chart_version` | ArgoCD Helm chart version | `string` | `"9.3.0"` | no |
+| `bootstrap_repository_url` | Git repository URL for ArgoCD configuration | `string` | `"https://github.com/openshift-online/rosa-regional-platform"` | no |
+| `bootstrap_repository_branch` | Git branch to track | `string` | `"main"` | no |
 
 ## Outputs
 
-| Name                                 | Description                                        |
-| ------------------------------------ | -------------------------------------------------- |
-| `cluster_name`                       | EKS cluster name (includes random suffix)          |
-| `cluster_endpoint`                   | EKS cluster API endpoint                           |
-| `cluster_certificate_authority_data` | Base64 encoded certificate data                    |
-| `vpc_id`                             | VPC ID where cluster is deployed                   |
-| `private_subnets`                    | Private subnet IDs where worker nodes are deployed |
-| `cluster_security_group_id`          | EKS cluster security group ID                      |
-| `bootstrap_report`                   | Bootstrap process information and status           |
+| Name | Description |
+|------|-------------|
+| `cluster_name` | EKS cluster name (includes random suffix) |
+| `cluster_endpoint` | EKS cluster API endpoint |
+| `cluster_certificate_authority_data` | Base64 encoded certificate data |
+| `vpc_id` | VPC ID where cluster is deployed |
+| `private_subnets` | Private subnet IDs where worker nodes are deployed |
+| `cluster_security_group_id` | EKS cluster security group ID |
+| `bootstrap_report` | Bootstrap process information and status |
 
 ## Bootstrap Functionality
 
@@ -148,7 +145,6 @@ When `bootstrap_enabled` is `true`, the module automatically installs ArgoCD for
 ### Bootstrap Process
 
 The Lambda function:
-
 - Runs in the cluster's private subnets for network access
 - Updates kubeconfig using EKS access entries and Pod Identity
 - Installs ArgoCD using Helm from the official repository

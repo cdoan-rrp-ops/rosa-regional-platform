@@ -24,9 +24,9 @@
 
 ## Design Rationale
 
-- **Justification**: [Explain why the chosen alternative is the best option given the context and constraints]
-- **Evidence**: [Provide concrete data, research findings, benchmarks, or expert opinions that support the decision]
-- **Comparison**: [Directly compare the chosen alternative to the other options, explaining why those were rejected]
+* **Justification**: [Explain why the chosen alternative is the best option given the context and constraints]
+* **Evidence**: [Provide concrete data, research findings, benchmarks, or expert opinions that support the decision]
+* **Comparison**: [Directly compare the chosen alternative to the other options, explaining why those were rejected]
 
 ## Consequences
 
@@ -34,19 +34,19 @@
 
 [List the beneficial outcomes expected from this decision. Be specific and concrete.]
 
-- [Positive consequence 1]
-- [Positive consequence 2]
-- [Positive consequence 3]
-- [Additional positive consequences as needed]
+* [Positive consequence 1]
+* [Positive consequence 2]
+* [Positive consequence 3]
+* [Additional positive consequences as needed]
 
 ### Negative
 
 [List the drawbacks, risks, or trade-offs associated with this decision. Be honest and thorough.]
 
-- [Negative consequence 1]
-- [Negative consequence 2]
-- [Negative consequence 3]
-- [Additional negative consequences as needed]
+* [Negative consequence 1]
+* [Negative consequence 2]
+* [Negative consequence 3]
+* [Additional negative consequences as needed]
 
 ## Cross-Cutting Concerns
 
@@ -54,41 +54,37 @@
 
 ### Reliability:
 
-- **Scalability**: [How does this decision affect the system's ability to scale? Include horizontal/vertical scaling considerations, load patterns, and capacity limits]
-- **Observability**: [How will the system be monitored and debugged? Include logging, metrics, tracing, and alerting considerations]
-- **Resiliency**: [How does this decision impact fault tolerance, disaster recovery, and high availability? Include SLAs, failover mechanisms, and recovery procedures]
+* **Scalability**: [How does this decision affect the system's ability to scale? Include horizontal/vertical scaling considerations, load patterns, and capacity limits]
+* **Observability**: [How will the system be monitored and debugged? Include logging, metrics, tracing, and alerting considerations]
+* **Resiliency**: [How does this decision impact fault tolerance, disaster recovery, and high availability? Include SLAs, failover mechanisms, and recovery procedures]
 
 ### Security:
-
 [Address authentication, authorization, encryption, compliance, and threat mitigation considerations]
 
-- [Security consideration 1]
-- [Security consideration 2]
-- [Additional security considerations as needed]
+* [Security consideration 1]
+* [Security consideration 2]
+* [Additional security considerations as needed]
 
 ### Performance:
-
 [Discuss latency, throughput, resource utilization, and optimization strategies]
 
-- [Performance consideration 1]
-- [Performance consideration 2]
-- [Additional performance considerations as needed]
+* [Performance consideration 1]
+* [Performance consideration 2]
+* [Additional performance considerations as needed]
 
 ### Cost:
-
 [Analyze direct costs, operational expenses, licensing fees, and cost optimization opportunities]
 
-- [Cost consideration 1]
-- [Cost consideration 2]
-- [Additional cost considerations as needed]
+* [Cost consideration 1]
+* [Cost consideration 2]
+* [Additional cost considerations as needed]
 
 ### Operability:
-
 [Consider deployment complexity, maintenance burden, tooling requirements, and operational procedures]
 
-- [Operability consideration 1]
-- [Operability consideration 2]
-- [Additional operability considerations as needed]
+* [Operability consideration 1]
+* [Operability consideration 2]
+* [Additional operability considerations as needed]
 
 ---
 
@@ -97,14 +93,12 @@
 Before finalizing a design decision document, verify:
 
 ### Structure Completeness
-
 - [ ] Title is descriptive and action-oriented
 - [ ] Last Updated Date is present and in ISO format (YYYY-MM-DD)
 - [ ] All core sections are present: Summary, Context, Alternatives Considered, Design Rationale, Consequences
 - [ ] Both positive and negative consequences are listed
 
 ### Content Quality
-
 - [ ] Design statement is clear and unambiguous
 - [ ] Problem statement articulates the "why"
 - [ ] Constraints and assumptions are explicitly documented
@@ -113,14 +107,12 @@ Before finalizing a design decision document, verify:
 - [ ] Trade-offs are honestly assessed
 
 ### Cross-Cutting Concerns
-
 - [ ] Each included concern has concrete details (not just placeholders)
 - [ ] Irrelevant sections have been removed
 - [ ] Security implications are considered where applicable
 - [ ] Cost impact is evaluated where applicable
 
 ### Best Practices
-
 - [ ] Document is written in clear, accessible language
 - [ ] Technical terms are used appropriately
 - [ ] Document provides sufficient detail for future reference

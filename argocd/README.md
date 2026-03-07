@@ -38,13 +38,11 @@ deploy/                                  # Generated outputs (DO NOT EDIT)
 ## Configuration Modes
 
 ### Live Config (Integration)
-
 - **Integration environments** run off the dynamic state in the current git revision (main or development branch configured for the cluster's ArgoCD)
 - **No commit pinning** - always uses latest changes
 - **Fast iteration** - changes appear immediately
 
 ### Pinned Commits (Staging/Production)
-
 - **"Cut releases"** by specifying commit hashes in `config.yaml`
 - **Progressive delivery** - roll through staging region deployments, then production region deployments
 - **Immutable deployments** - exact reproducible state
@@ -75,7 +73,7 @@ region_deployments:
     management_clusters:
       - cluster_id: "mc01-eu-west-1"
         account_id: "987654321"
-    config_revision: # Pinned commits for stability
+    config_revision:                     # Pinned commits for stability
       management-cluster: "826fa76d08fc2ce87c863196e52d5a4fa9259a82"
       regional-cluster: "826fa76d08fc2ce87c863196e52d5a4fa9259a82"
     values:
@@ -125,11 +123,9 @@ ArgoCD uses a **Matrix Generator** pattern with two generators:
 - **Cluster Generator**: Uses cluster secrets created during EKS provisioning (contains cluster identity: cluster_type, environment, region)
 
 The Git Generator gets either:
-
 - **Pinned commit hash** (when `config_revision` specified) for snapshotted charts
 - **Current git_revision** (when no `config_revision`) for live charts
 
 **Application Sources:**
-
 - **Charts & Default Values**: From `argocd/config/` at pinned commit OR current git_revision
 - **Rendered Values**: From `deploy/<env>/<region_deployment>/argocd/` at current git_revision (always latest environment config)

@@ -7,6 +7,7 @@
   "account_id": "633630779107",
   "region": "us-east-1",
   "alias": "regional-us-east-1",
+  "region_deployment": "us-east-1",
   "management_cluster_account_ids": [
     "018092638725"
   ]

@@ -1,0 +1,69 @@
+# Default values for hyperfleet-adapter1-chart
+# This chart creates an ArgoCD Application that deploys the HyperFleet Adapter Helm chart
+
+hyperfleetSentinel1Chart:
+  # Name of the ArgoCD Application
+  name: hyperfleet-sentinel1
+
+  # Namespace where the ArgoCD Application resource will be created
+  namespace: argocd
+
+  # Target namespace where the HyperFleet Adapter will be deployed
+  targetNamespace: hyperfleet-system
+
+  # Source configuration for the external Helm chart
+  source:
+    repoURL: https://github.com/cdoan1/hyperfleet-sentinel
+    targetRevision: ROSAENG-133
+    path: charts
+
+  # Sync policy configuration
+  syncPolicy:
+    automated:
+      prune: true
+      selfHeal: true
+    syncOptions:
+      - CreateNamespace=false
+      - ServerSideApply=true
+
+  # Additional Helm values to pass to the external chart
+  values:
+    replicaCount: 1
+    image:
+      registry: quay.io/cdoan0
+      repository: sentinel
+      tag: v0.1.0-dev
+      pullPolicy: Always
+    serviceAccount:
+      create: true
+      name: sentinel-sa
+      annotations: {}
+    config:
+      resourceType: clusters
+      resourceSelector: []
+      hyperfleetApi:
+        baseUrl: "http://hyperfleet-api.hyperfleet-system.svc.cluster.local:8000"
+      log_config: true
+      messageData:
+        id: "resource.id"
+        kind: "resource.kind"
+        href: "resource.href"
+        generation: "resource.generation"
+    broker:
+      external:
+        aws:
+          region: us-east-2
+          secretName: hyperfleet/mq-credentials
+        createSecretProviderClass: true
+        enabled: true
+        exchangeType: topic
+        podidentity: true
+        secretMountPath: /mnt/secrets-store
+        secretProviderClass: hyperfleet-sentinel-mq-secrets
+        url: "amqp://placeholder:placeholder@localhost:5672/"
+      rabbitmq:
+        enabled: false
+        exchangeType: topic
+        url: "amqp://placeholder:placeholder@localhost:5672/"
+      topic: clusters
+      type: rabbitmq

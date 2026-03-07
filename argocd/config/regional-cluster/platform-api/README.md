@@ -5,7 +5,6 @@ Helm chart for the ROSA Regional Platform API with Envoy sidecar proxy.
 ## Overview
 
 This chart deploys:
-
 - Platform API application with authorization middleware
 - Envoy sidecar for unified traffic routing
 - Service exposing ports 8080 (Envoy), 8000 (API), 8081 (health), 9090 (metrics)
@@ -31,14 +30,14 @@ platformApi:
       repository: quay.io/cdoan0/rosa-regional-platform-api
       tag: nodb
     args:
-      allowedAccounts: "123456789012" # Comma-separated AWS account IDs
+      allowedAccounts: "123456789012"  # Comma-separated AWS account IDs
       maestroUrl: http://maestro:8000
 
   envoy:
     enabled: true
 
   targetGroup:
-    arn: "PLACEHOLDER" # AWS Target Group ARN
+    arn: "PLACEHOLDER"  # AWS Target Group ARN
     targetType: ip
 ```
 
@@ -119,31 +118,31 @@ kubectl delete namespace platform-api
 
 ### Application Configuration
 
-| Parameter                              | Description                          | Default                                     |
-| -------------------------------------- | ------------------------------------ | ------------------------------------------- |
-| `platformApi.namespace`                | Namespace to deploy into             | `platform-api`                              |
-| `platformApi.app.name`                 | Application name                     | `platform-api`                              |
-| `platformApi.app.image.repository`     | Container image repository           | `quay.io/cdoan0/rosa-regional-platform-api` |
-| `platformApi.app.image.tag`            | Container image tag                  | `nodb`                                      |
-| `platformApi.app.args.allowedAccounts` | Comma-separated AWS account IDs      | `"123456789012"`                            |
-| `platformApi.app.args.maestroUrl`      | Maestro service URL                  | `http://maestro:8000`                       |
-| `platformApi.app.args.logLevel`        | Log level (debug, info, warn, error) | `info`                                      |
-| `platformApi.deployment.replicas`      | Number of replicas                   | `1`                                         |
+| Parameter | Description | Default |
+|-----------|-------------|---------|
+| `platformApi.namespace` | Namespace to deploy into | `platform-api` |
+| `platformApi.app.name` | Application name | `platform-api` |
+| `platformApi.app.image.repository` | Container image repository | `quay.io/cdoan0/rosa-regional-platform-api` |
+| `platformApi.app.image.tag` | Container image tag | `nodb` |
+| `platformApi.app.args.allowedAccounts` | Comma-separated AWS account IDs | `"123456789012"` |
+| `platformApi.app.args.maestroUrl` | Maestro service URL | `http://maestro:8000` |
+| `platformApi.app.args.logLevel` | Log level (debug, info, warn, error) | `info` |
+| `platformApi.deployment.replicas` | Number of replicas | `1` |
 
 ### Envoy Configuration
 
-| Parameter                            | Description            | Default            |
-| ------------------------------------ | ---------------------- | ------------------ |
-| `platformApi.envoy.enabled`          | Enable Envoy sidecar   | `true`             |
+| Parameter | Description | Default |
+|-----------|-------------|---------|
+| `platformApi.envoy.enabled` | Enable Envoy sidecar | `true` |
 | `platformApi.envoy.image.repository` | Envoy image repository | `envoyproxy/envoy` |
-| `platformApi.envoy.image.tag`        | Envoy image tag        | `v1.31-latest`     |
+| `platformApi.envoy.image.tag` | Envoy image tag | `v1.31-latest` |
 
 ### Target Group Configuration
 
-| Parameter                            | Description                  | Default         |
-| ------------------------------------ | ---------------------------- | --------------- |
-| `platformApi.targetGroup.arn`        | AWS Target Group ARN         | `"PLACEHOLDER"` |
-| `platformApi.targetGroup.targetType` | Target type (ip or instance) | `ip`            |
+| Parameter | Description | Default |
+|-----------|-------------|---------|
+| `platformApi.targetGroup.arn` | AWS Target Group ARN | `"PLACEHOLDER"` |
+| `platformApi.targetGroup.targetType` | Target type (ip or instance) | `ip` |
 
 ## Architecture
 
@@ -172,7 +171,6 @@ kubectl delete namespace platform-api
 ## Health Checks
 
 The application exposes health endpoints on port 8081:
-
 - `/healthz` - Liveness probe
 - `/readyz` - Readiness probe
 
@@ -190,14 +188,12 @@ curl -s http://localhost:8080/api/v0/management_clusters \
 ## Troubleshooting
 
 ### Check pod status
-
 ```bash
 kubectl get pods -n platform-api
 kubectl describe pod -n platform-api <pod-name>
 ```
 
 ### View logs
-
 ```bash
 # Application logs
 kubectl logs -n platform-api <pod-name> -c platform-api
@@ -207,14 +203,12 @@ kubectl logs -n platform-api <pod-name> -c envoy
 ```
 
 ### Check TargetGroupBinding
-
 ```bash
 kubectl get targetgroupbinding -n platform-api
 kubectl describe targetgroupbinding -n platform-api platform-api
 ```
 
 ### Test health endpoints
-
 ```bash
 # Port-forward to test locally
 kubectl port-forward -n platform-api svc/platform-api 8080:8080

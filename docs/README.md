@@ -167,7 +167,7 @@ This overview was synthesized from the following source materials:
 1. **FAQ.md** - Comprehensive architectural questions and answers
 2. **terraform/modules/eks-cluster/README.md** - EKS cluster module documentation
 3. **.local/ROSA HCP Regionality - Project Plan.pdf** - Project planning documentation
-4. **.local/Configuration paths \_ Data flows - Sheet1.pdf** - Configuration and data flow diagrams
+4. **.local/Configuration paths _ Data flows - Sheet1.pdf** - Configuration and data flow diagrams
 5. **design-decisions/TEMPLATE.md** - Design decision documentation template
 
 For detailed technical specifications, implementation details, and answers to specific questions, please refer to the FAQ.md file in the repository root.

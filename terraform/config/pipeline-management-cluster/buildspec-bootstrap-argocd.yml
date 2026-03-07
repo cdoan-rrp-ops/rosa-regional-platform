@@ -20,11 +20,6 @@ phases:
       - |
         set -euo pipefail
 
-        if [ "${IS_DESTROY:-false}" == "true" ]; then
-            echo "IS_DESTROY=true — skipping ArgoCD bootstrap (cluster is being destroyed)"
-            exit 0
-        fi
-
         # Pre-flight setup (validates env vars, inits account helpers)
         source scripts/pipeline-common/setup-apply-preflight.sh
 
@@ -41,5 +36,7 @@ phases:
         # Bootstrap ArgoCD (already in target account, no cross-account assume needed)
         ./scripts/pipeline-common/bootstrap-argocd-wrapper.sh management-cluster "${TARGET_ACCOUNT_ID}"
 
-        echo "ArgoCD bootstrap complete."
-        echo "Management cluster is now fully provisioned and ready for use."
+  post_build:
+    commands:
+      - echo "ArgoCD bootstrap complete."
+      - echo "Management cluster is now fully provisioned and ready for use."

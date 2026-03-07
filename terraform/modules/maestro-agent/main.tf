@@ -28,8 +28,7 @@ locals {
 resource "aws_secretsmanager_secret" "maestro_agent_cert" {
   name        = local.agent_cert_secret_name
   description = "Maestro Agent MQTT certificate material for ${var.cluster_id}"
-  # TODO(typeid): set back to 30 once we have unique secret names to prevent collisions in e2e runs
-  recovery_window_in_days = 0
+  tags        = local.common_tags
 }
 
 resource "aws_secretsmanager_secret_version" "maestro_agent_cert" {
@@ -40,8 +39,7 @@ resource "aws_secretsmanager_secret_version" "maestro_agent_cert" {
 resource "aws_secretsmanager_secret" "maestro_agent_config" {
   name        = local.agent_config_secret_name
   description = "Maestro Agent MQTT configuration for ${var.cluster_id}"
-  # TODO(typeid): set back to 30 once we have unique secret names to prevent collisions in e2e runs
-  recovery_window_in_days = 0
+  tags        = local.common_tags
 }
 
 resource "aws_secretsmanager_secret_version" "maestro_agent_config" {

@@ -359,11 +359,6 @@ resource "aws_codepipeline" "central_pipeline" {
   role_arn      = aws_iam_role.codepipeline_role.arn
   pipeline_type = "V2"
 
-  variable {
-    name          = "IS_DESTROY"
-    default_value = "false"
-  }
-
   artifact_store {
     location = aws_s3_bucket.pipeline_artifact.bucket
     type     = "S3"
@@ -418,13 +413,6 @@ resource "aws_codepipeline" "central_pipeline" {
 
       configuration = {
         ProjectName = aws_codebuild_project.regional_apply.name
-        EnvironmentVariables = jsonencode([
-          {
-            name  = "IS_DESTROY"
-            value = "#{variables.IS_DESTROY}"
-            type  = "PLAINTEXT"
-          }
-        ])
       }
     }
   }
@@ -442,13 +430,6 @@ resource "aws_codepipeline" "central_pipeline" {
 
       configuration = {
         ProjectName = aws_codebuild_project.regional_bootstrap.name
-        EnvironmentVariables = jsonencode([
-          {
-            name  = "IS_DESTROY"
-            value = "#{variables.IS_DESTROY}"
-            type  = "PLAINTEXT"
-          }
-        ])
       }
     }
   }

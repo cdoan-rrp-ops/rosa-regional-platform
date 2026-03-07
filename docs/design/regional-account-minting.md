@@ -9,20 +9,24 @@ AWS Account Minting will leverage a collection of idempotent pipelines in order 
 ```yaml
 control:
   rosa-regional-platform:
-    prod: prod-us-east-1
+    prod:
+      prod-us-east-1
       prod-eu-west-2
       ...
 
 staging-1:
   rosa-regional-platform:
-    int: int-us-east-2
-    stage: stage-us-east-1
+    int:
+      int-us-east-2
+    stage:
+      stage-us-east-1
       stage-eu-west-2
       ...
 
 staging-2:
   rosa-regional-platform:
-    dev: dev-kirk-us-east-2
+    dev:
+      dev-kirk-us-east-2
       dev-pete-eu-west-1
       ...
 ```
@@ -149,6 +153,7 @@ sequenceDiagram
 
 - This account minting design is specific to AWS and cannot be reused with Managed OpenShift on other cloud providers. Future implementations for additional cloud providers will require separate design and pipeline architecture.
 
+
 ### Reliability
 
 - **Scalability**: Since this solution leverages AWS-native services we should be able to "infinitely" scale, up to any cloud-provider limits.
@@ -167,7 +172,7 @@ sequenceDiagram
 
 - Cost depends on the pipeline runner chosen (which is out of scope for this document). The expected run volumes are:
   - **Account Minting Pipeline**: One run per day per "central account" environment - all static accounts are managed by a single terraform so we run once per day to reconcile and ensure there's no configuration drift. Additional runs when new regions are added or when account-level tags are updated will also be done, but these will be infrequent.
-  - **Account Bootstrapping Pipeline**: 1:1 with all managed Accounts, so ~40 Prod AWS regions, ~4 stage AWS regions, 1-2 int regions, and a handful of dev regions \* 6 accounts = ~80-120 pipeline runs per day. Potentially more in the future as we scale regions if this pipeline is reused. Changes are infrequent.
+  - **Account Bootstrapping Pipeline**: 1:1 with all managed Accounts, so ~40 Prod AWS regions, ~4 stage AWS regions, 1-2 int regions, and a handful of dev regions * 6 accounts = ~80-120 pipeline runs per day. Potentially more in the future as we scale regions if this pipeline is reused. Changes are infrequent.
   - **Account Provisioning Pipeline**: 1:1 with all managed Accounts. Estimating ~10 MCs per region with ~1 weekly configuration change, this amounts to ~400 weekly runs (10 MCs × 40 regions). Additional daily reconcile on all other accounts (RC, DR, Log Storage, etc) where changes are much less frequent.
 
 ### Operability

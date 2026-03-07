@@ -4,11 +4,12 @@
   "service_phase": "dev",
   "cost_center": "000",
   "environment": "psav-central",
-  "account_id": "ssm:///infra/psav-central/us-east-1/account_id",
+  "enable_bastion": true,
+  "account_id": "ssm:/infra/psav-central/us-east-1/account_id",
   "region": "us-east-1",
   "alias": "regional-us-east-1",
-  "enable_bastion": true,
+  "region_deployment": "us-east-1",
   "management_cluster_account_ids": [
-    "ssm:///infra/psav-central/us-east-1/mc01/account_id"
+    "ssm:/infra/psav-central/us-east-1/mc01/account_id"
   ]
 }

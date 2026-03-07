@@ -77,16 +77,16 @@ def validate_config_revisions(region_deployments):
     for rd in region_deployments:
         region_deployment = rd.get('region_deployment', 'unknown')
         environment = rd.get('environment', 'unknown')
-        revision = rd.get('revision')
+        config_revisions = rd.get('config_revision', {})
 
-        # Only validate non-default revisions (branch names like "main" are not commit hashes)
-        if revision and revision != 'main':
-            if not commit_hash_pattern.match(revision):
-                raise ValueError(
-                    f"Invalid commit hash for region deployment {region_deployment} ({environment}): "
-                    f"'{revision}'. "
-                    f"Expected 7-40 character hexadecimal string."
-                )
+        for cluster_type, revision in config_revisions.items():
+            if revision:  # Only validate if revision is specified
+                if not commit_hash_pattern.match(revision):
+                    raise ValueError(
+                        f"Invalid commit hash for region deployment {region_deployment} ({environment}): "
+                        f"'{revision}' (cluster_type: {cluster_type}). "
+                        f"Expected 7-40 character hexadecimal string."
+                    )
 
 
 def save_yaml(data: Dict[str, Any], file_path: Path, cluster_type: str, rd: Dict[str, Any]) -> None:
@@ -165,25 +165,12 @@ def resolve_templates(value: Any, context: Dict[str, Any]) -> Any:
 
 
 def resolve_region_deployments(config: Dict[str, Any]) -> List[Dict[str, Any]]:
-    """Resolve region deployments by walking the nested config hierarchy.
+    """Resolve region deployments by merging sector defaults and processing templates.
 
-    Walks environments → [sectors →] region_deployments, deep-merging inheritable
-    fields (terraform_vars, values) through the chain:
-    defaults → environment → sector → region_deployment (most-specific wins).
-
-    Environments may place region_deployments directly (implicit default sector)
-    or use explicit ``sectors:`` for multi-sector setups.
-
-    Scalar fields (revision, bootstrap_pipeline_revision) use simple override
-    (most-specific non-None wins).
-
-    Management clusters are converted from dict form to list form with auto-derived
-    cluster_id = "{mc_key}-{rd_name}".  If an MC entry omits account_id, the
-    defaults.management_cluster_account_id template is applied with
-    ``cluster_prefix`` (the MC dict key) available in the Jinja2 context.
-
-    All string values are then template-processed using region deployment fields
-    as context.
+    Each region deployment's "sector" field links to a sector by name. The sector's
+    values, terraform_vars, and environment are inherited by the region deployment.
+    Region deployment-level settings override sector defaults via deep merge. All
+    string values are then template-processed using region deployment fields as context.
 
     Args:
         config: Full parsed config.yaml
@@ -191,92 +178,43 @@ def resolve_region_deployments(config: Dict[str, Any]) -> List[Dict[str, Any]]:
     Returns:
         List of fully resolved region deployment configurations
     """
-    defaults = config.get('defaults', {})
-    environments = config.get('environments', {})
+    sectors = config.get('sectors', [])
+    sectors_by_name = {s['name']: s for s in sectors}
+    region_deployments = config.get('region_deployments', [])
 
     resolved = []
-    for env_name, env_config in environments.items():
-        env_config = env_config or {}
+    for rd in region_deployments:
+        rd = dict(rd)  # shallow copy to avoid mutating original
+        sector_name = rd.get('sector')
+        sector = sectors_by_name.get(sector_name, {})
 
-        # Support both explicit sectors and flattened region_deployments
-        if 'sectors' in env_config:
-            sectors = env_config['sectors'] or {}
-        elif 'region_deployments' in env_config:
-            # Implicit default sector
-            sectors = {'default': {'region_deployments': env_config['region_deployments']}}
-        else:
-            sectors = {}
+        # Inherit environment from sector
+        rd['environment'] = sector.get('environment', sector_name)
 
-        for sector_name, sector_config in sectors.items():
-            sector_config = sector_config or {}
-            for rd_name, rd_config in (sector_config.get('region_deployments') or {}).items():
-                rd_config = rd_config or {}
-                rd = {}
+        # Derive region_deployment from name (backward compat for templates & K8s labels)
+        rd['name'] = rd.get('name', rd.get('region', ''))
+        rd['region_deployment'] = rd['name']
+        rd['aws_region'] = rd.get('aws_region', rd.get('region_deployment', ''))
 
-                # Set identity fields
-                rd['name'] = rd_name
-                rd['aws_region'] = rd_name
-                rd['region'] = rd_name
-                rd['region_deployment'] = rd_name
-                rd['environment'] = env_name
+        # Keep 'region' in template context as alias for aws_region (backward compat)
+        rd['region'] = rd['aws_region']
 
-                # Resolve account_id: rd → sector → env → defaults (first non-None wins)
-                raw_account_id = (
-                    rd_config.get('account_id')
-                    or sector_config.get('account_id')
-                    or env_config.get('account_id')
-                    or defaults.get('account_id', '')
-                )
-                rd['account_id'] = resolve_templates(raw_account_id, rd)
+        # Deep merge: sector values are defaults, region deployment values override
+        sector_values = sector.get('values', {})
+        rd_values = rd.get('values', {})
+        rd['values'] = deep_merge(sector_values, rd_values)
 
-                # Deep merge terraform_vars: defaults → env → sector → rd
-                tf_vars = deep_merge(
-                    defaults.get('terraform_vars', {}),
-                    env_config.get('terraform_vars', {})
-                )
-                tf_vars = deep_merge(tf_vars, sector_config.get('terraform_vars', {}))
-                tf_vars = deep_merge(tf_vars, rd_config.get('terraform_vars', {}))
-                rd['terraform_vars'] = tf_vars
+        # Deep merge terraform_vars
+        sector_tf_vars = sector.get('terraform_vars', {})
+        rd_tf_vars = rd.get('terraform_vars', {})
+        rd['terraform_vars'] = deep_merge(sector_tf_vars, rd_tf_vars)
 
-                # Deep merge values: defaults → env → sector → rd
-                values = deep_merge(
-                    defaults.get('values', {}),
-                    env_config.get('values', {})
-                )
-                values = deep_merge(values, sector_config.get('values', {}))
-                values = deep_merge(values, rd_config.get('values', {}))
-                rd['values'] = values
+        # Template-process values, terraform_vars, and management_clusters using region deployment fields as context
+        rd['values'] = resolve_templates(rd['values'], rd)
+        rd['terraform_vars'] = resolve_templates(rd['terraform_vars'], rd)
+        rd['management_clusters'] = resolve_templates(rd.get('management_clusters', []), rd)
 
-                # Convert management_clusters dict → list with auto-derived cluster_id
-                mc_dict = rd_config.get('management_clusters') or {}
-                default_mc_account_id = defaults.get('management_cluster_account_id')
-                mc_list = []
-                for mc_key, mc_val in mc_dict.items():
-                    mc_entry = dict(mc_val) if mc_val else {}
-                    mc_entry['cluster_id'] = f"{mc_key}-{rd_name}"
-                    # Apply default MC account_id if not specified
-                    if 'account_id' not in mc_entry and default_mc_account_id:
-                        mc_entry['account_id'] = default_mc_account_id
-                    # Template-process with augmented context (cluster_prefix)
-                    mc_context = dict(rd)
-                    mc_context['cluster_prefix'] = mc_key
-                    mc_entry = resolve_templates(mc_entry, mc_context)
-                    mc_list.append(mc_entry)
-                rd['management_clusters'] = mc_list
-
-                # Inherit revision (scalar override: most-specific non-None wins)
-                rd['revision'] = (
-                    rd_config.get('revision')
-                    or sector_config.get('revision')
-                    or env_config.get('revision')
-                    or defaults.get('revision')
-                )
-
-                # Template-process values and terraform_vars
-                rd['values'] = resolve_templates(rd['values'], rd)
-                rd['terraform_vars'] = resolve_templates(rd['terraform_vars'], rd)
-
-                resolved.append(rd)
+        resolved.append(rd)
 
     return resolved
 
@@ -354,9 +292,7 @@ def render_region_deployment_applicationsets(
     """
     environment = rd['environment']
     region_deployment = rd['region_deployment']
-    revision = rd.get('revision')
-    # A non-default revision pins all cluster types to that commit hash
-    pinned_revision = revision if (revision and revision != 'main') else None
+    config_revisions = rd.get('config_revision', {})
 
     # Create output directory
     output_dir = deploy_dir / environment / region_deployment / 'argocd'
@@ -364,7 +300,7 @@ def render_region_deployment_applicationsets(
 
     # Process each cluster type
     for cluster_type in cluster_types:
-        config_revision = pinned_revision
+        config_revision = config_revisions.get(cluster_type)  # Get cluster-specific commit hash (may be None)
 
         applicationset_data = create_applicationset_template(cluster_type, environment, region_deployment, config_revision, base_dir)
 

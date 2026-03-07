@@ -1,0 +1,81 @@
+  # Default values for hyperfleet-api-chart
+# This chart creates an ArgoCD Application that deploys the HyperFleet API Helm chart
+
+hyperfleetApiChart:
+  # Name of the ArgoCD Application
+  name: hyperfleet-api
+
+  # Namespace where the ArgoCD Application resource will be created
+  namespace: argocd
+
+  # Target namespace where the HyperFleet API will be deployed
+  targetNamespace: hyperfleet-system
+
+  # Source configuration for the external Helm chart
+  source:
+    repoURL: https://github.com/cdoan1/hyperfleet-api
+    targetRevision: ROSAENG-130
+    path: charts
+
+  # Sync policy configuration
+  syncPolicy:
+    automated:
+      prune: true
+      selfHeal: true
+    syncOptions:
+      - CreateNamespace=true
+      - ServerSideApply=true
+
+  # Additional Helm values to pass to the external chart
+  values:
+    replicaCount: 1
+    image:
+      registry: quay.io/openshift-hyperfleet
+      repository: hyperfleet-api
+      tag: v0.1.0
+      pullPolicy: Always
+    serviceAccount:
+      create: true
+      name: hyperfleet-api-sa
+      annotations: {}
+    server:
+      bindAddress: ":8000"
+      healthBindAddress: ":8080"
+      metricsBindAddress: ":9090"
+    service:
+      type: ClusterIP
+      port: 8000
+      healthPort: 8080
+      metricsPort: 9090
+    database:
+      postgresql:
+        enabled: false
+      external:
+        enabled: true
+        # Name of the Kubernetes Secret containing db.host, db.port, db.name, db.user, db.password.
+        # Required when external is enabled. Create via SecretProviderClass secretObjects, ExternalSecret, or manually.
+        secretName: hyperfleet-api-db-secrets
+        usePodIdentity: true
+        secretMountPath: /mnt/secrets-store
+        secretProviderClass: ""
+        # Create a SecretProviderClass from the chart (uses database.external.aws when true)
+        createSecretProviderClass: true
+        # AWS Secrets Manager config when createSecretProviderClass is true
+        aws:
+          region: "us-east-2"
+          # Secrets Manager secret name or ARN (objectName in SecretProviderClass)
+          secretName: "hyperfleet/db-credentials"
+        # PostgreSQL SSL mode: disable | require | verify-ca | verify-full
+        sslMode: require
+
+    adapters:
+      cluster:
+        - adapter1
+        - adapter2
+      nodepool:
+        - adapter3      
+    aws:
+      region: us-east-2
+      podIdentity:
+        enabled: true
+        roleArn: ""
