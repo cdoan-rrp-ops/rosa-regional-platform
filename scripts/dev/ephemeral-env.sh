@@ -190,14 +190,16 @@ setup_override_mount() {
 }
 
 # Fetch GitHub token from Secrets Manager (unless already set).
-# Requires rrp-ephemeral-central profile to be available.
+# Requires rrp-ephemeral-central (or rrp-central when RRP_AWS_PROFILES_PRESET is set) profile.
 fetch_github_token() {
     if [[ -z "${GITHUB_TOKEN:-}" ]]; then
         echo "Fetching GitHub token from SSM Parameter Store..."
+        local central_profile="rrp-ephemeral-central"
+        [[ -z "${RRP_AWS_PROFILES_PRESET:-}" ]] || central_profile="rrp-central"
         GITHUB_TOKEN=$(aws ssm get-parameter \
             --name "$GITHUB_TOKEN_SECRET" \
             --with-decryption \
-            --profile rrp-ephemeral-central \
+            --profile "$central_profile" \
             --query Parameter.Value --output text 2>/dev/null) \
             || die "Failed to fetch GitHub token from SSM."
     fi
@@ -206,6 +208,12 @@ fetch_github_token() {
 
 # Create temporary AWS config with ephemeral profiles.
 setup_aws_config() {
+    if [[ -n "${RRP_AWS_PROFILES_PRESET:-}" ]]; then
+        echo "Using pre-existing AWS credentials (RRP_AWS_PROFILES_PRESET)"
+        export AWS_CONFIG_FILE=${AWS_CONFIG_FILE:-$HOME/.aws/config}
+        return 0
+    fi
+
     local accounts_file="${RRP_ACCOUNTS_DEV:-${REPO_ROOT}/../rosa-regional-platform-internal/infra/accounts/dev/accounts.json}"
     [[ -f "$accounts_file" ]] \
         || die "Account IDs file not found: $accounts_file
@@ -213,12 +221,6 @@ setup_aws_config() {
     or set RRP_ACCOUNTS_DEV to point to your accounts JSON file.
     See docs/development-environment.md for details."
     load_accounts "$accounts_file" admin central rc mc customer
-
-    if [[ -n "${RRP_AWS_PROFILES_PRESET:-}" ]]; then
-        echo "Using pre-existing AWS credentials (RRP_AWS_PROFILES_PRESET)"
-        export AWS_CONFIG_FILE=${AWS_CONFIG_FILE:-$HOME/.aws/config}
-        return 0
-    fi
 
     init_aws_config
 
