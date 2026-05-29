@@ -6,8 +6,8 @@
   "environment": "integration",
   "account_id": "ssm:///infra/integration/us-east-1/mc01/account_id",
   "region": "us-east-1",
-  "alias": "mc01",
-  "management_id": "mc01",
+  "alias": "eph-a3ca36f9-mc01",
+  "management_id": "eph-a3ca36f9-mc01",
   "regional_aws_account_id": "ssm:///infra/integration/us-east-1/account_id",
   "node_instance_types": ["t3.medium", "t3a.medium"],
   "enable_bastion": true

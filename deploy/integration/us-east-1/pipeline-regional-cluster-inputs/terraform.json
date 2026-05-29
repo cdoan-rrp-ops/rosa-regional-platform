@@ -15,9 +15,9 @@
   "enable_api_custom_domain": true,
   "zone_shard_count": 1,
   "enable_sns_alerting": true,
-  "regional_id": "regional",
-  "eph_prefix": "",
+  "regional_id": "eph-a3ca36f9-regional",
+  "eph_prefix": "eph-a3ca36f9",
   "node_instance_types": ["t3.medium", "t3a.medium"],
   "iot_log_level": "WARN",
-  "management_clusters_info": [{"account_id": "ssm:///infra/integration/us-east-1/mc01/account_id", "id": "mc01"}]
+  "management_clusters_info": [{"account_id": "ssm:///infra/integration/us-east-1/mc01/account_id", "id": "eph-a3ca36f9-mc01"}]
 }
