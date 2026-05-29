@@ -161,6 +161,16 @@ if [[ $rc -ne 0 ]]; then
         # reliably redacted. The S3 URIs are printed below for manual retrieval.
         S3_ONLY=true \
             "${REPO_ROOT}/scripts/dev/collect-cluster-logs.sh" || true
+
+        # When HCP creation tests were attempted, also collect must-gather
+        # resources from the MC (HostedCluster, NodePool, HyperShift operator
+        # logs, Maestro agent) to help diagnose HCP creation failures.
+        if [[ "${_have_customer_creds:-false}" == "true" ]]; then
+            echo ""
+            echo "Collecting HCP must-gather from Management Cluster(s)..."
+            S3_ONLY=true \
+                "${REPO_ROOT}/scripts/dev/collect-hcp-must-gather.sh" || true
+        fi
     fi
     exit $rc
 fi

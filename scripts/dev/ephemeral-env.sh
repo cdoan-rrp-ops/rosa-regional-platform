@@ -34,16 +34,17 @@ usage() {
     echo "Usage: $0 <command>"
     echo ""
     echo "Commands:"
-    echo "  provision       Provision an ephemeral environment"
-    echo "  teardown        Tear down an ephemeral environment"
-    echo "  resync          Resync an ephemeral environment to your branch"
-    echo "  swap-branch     Swap an ephemeral environment to a different branch"
-    echo "  list            List ephemeral environments"
-    echo "  shell           Interactive shell for Platform API access"
-    echo "  bastion         Connect to RC/MC bastion in an ephemeral env"
-    echo "  port-forward    Forward ports through RC/MC bastion in an ephemeral env"
-    echo "  e2e             Run e2e tests against an ephemeral env"
-    echo "  collect-logs    Collect kubernetes logs from RC/MC in an ephemeral env"
+    echo "  provision         Provision an ephemeral environment"
+    echo "  teardown          Tear down an ephemeral environment"
+    echo "  resync            Resync an ephemeral environment to your branch"
+    echo "  swap-branch       Swap an ephemeral environment to a different branch"
+    echo "  list              List ephemeral environments"
+    echo "  shell             Interactive shell for Platform API access"
+    echo "  bastion           Connect to RC/MC bastion in an ephemeral env"
+    echo "  port-forward      Forward ports through RC/MC bastion in an ephemeral env"
+    echo "  e2e               Run e2e tests against an ephemeral env"
+    echo "  collect-logs      Collect kubernetes logs from RC/MC in an ephemeral env"
+    echo "  hcp-must-gather   Collect HCP must-gather resources from MC(s) in an ephemeral env"
 }
 
 usage_bastion_interactive() {
@@ -1073,6 +1074,36 @@ cmd_collect_logs() {
     "${REPO_ROOT}/scripts/dev/collect-cluster-logs.sh" "$cluster_type"
 }
 
+cmd_hcp_must_gather() {
+    # Select environment (ready only)
+    select_env "STATE=ready" \
+        "Select environment for HCP must-gather:" \
+        "No ready environments found." \
+        true
+
+    setup_aws_config
+    write_eph_container_config
+
+    local region
+    region=$(get_field "$ENV_LINE" REGION)
+
+    local eph_prefix
+    eph_prefix="eph-${BUILD_ID}-"
+
+    # collect-hcp-must-gather.sh runs on the host (not in a container) but
+    # needs the standardized profile names (rrp-mc). Point it at the resolved
+    # container config which has those profiles with static credentials.
+    export AWS_CONFIG_FILE="$_CONTAINER_CONFIG"
+    export AWS_SHARED_CREDENTIALS_FILE=/dev/null
+    export AWS_REGION="$region"
+    export CLUSTER_PREFIX="$eph_prefix"
+    if [[ -n "${ARTIFACT_DIR:-}" ]]; then
+        export LOG_OUTPUT_DIR="$ARTIFACT_DIR"
+    fi
+
+    "${REPO_ROOT}/scripts/dev/collect-hcp-must-gather.sh"
+}
+
 # =============================================================================
 # Main
 # =============================================================================
@@ -1085,7 +1116,7 @@ case "${1:-help}" in
 esac
 
 case "${1:-help}" in
-    bastion|collect-logs)
+    bastion|collect-logs|hcp-must-gather)
         for tool in jq uv aws; do
             command -v "$tool" >/dev/null 2>&1 || die "Missing required tool: $tool"
         done
@@ -1107,15 +1138,16 @@ case "${1:-help}" in
 esac
 
 case "${1:-help}" in
-    provision)      cmd_provision ;;
-    teardown)       cmd_teardown ;;
-    resync)         cmd_resync ;;
-    swap-branch)    cmd_swap_branch ;;
-    shell)          cmd_shell ;;
-    bastion)        shift; cmd_bastion_interactive "$@" ;;
-    port-forward)   shift; cmd_bastion_port_forward "$@" ;;
-    e2e)            cmd_e2e ;;
-    collect-logs)   shift; cmd_collect_logs "$@" ;;
+    provision)        cmd_provision ;;
+    teardown)         cmd_teardown ;;
+    resync)           cmd_resync ;;
+    swap-branch)      cmd_swap_branch ;;
+    shell)            cmd_shell ;;
+    bastion)          shift; cmd_bastion_interactive "$@" ;;
+    port-forward)     shift; cmd_bastion_port_forward "$@" ;;
+    e2e)              cmd_e2e ;;
+    collect-logs)     shift; cmd_collect_logs "$@" ;;
+    hcp-must-gather)  cmd_hcp_must_gather ;;
     help|*)
         usage
         ;;

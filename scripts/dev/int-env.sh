@@ -36,11 +36,12 @@ usage() {
     echo "Usage: $0 <command>"
     echo ""
     echo "Commands:"
-    echo "  shell           Interactive shell for Platform API access"
-    echo "  bastion         Connect to RC/MC bastion"
-    echo "  port-forward    Forward ports through RC/MC bastion"
-    echo "  e2e             Run e2e tests"
-    echo "  collect-logs    Collect kubernetes logs from RC/MC"
+    echo "  shell             Interactive shell for Platform API access"
+    echo "  bastion           Connect to RC/MC bastion"
+    echo "  port-forward      Forward ports through RC/MC bastion"
+    echo "  e2e               Run e2e tests"
+    echo "  collect-logs      Collect kubernetes logs from RC/MC"
+    echo "  hcp-must-gather   Collect HCP must-gather resources from MC(s)"
 }
 
 usage_bastion() {
@@ -513,6 +514,24 @@ cmd_collect_logs() {
     "${REPO_ROOT}/scripts/dev/collect-cluster-logs.sh" "$cluster_type"
 }
 
+cmd_hcp_must_gather() {
+    setup_aws_config
+    write_int_container_config
+
+    # collect-hcp-must-gather.sh runs on the host (not in a container) but
+    # needs the standardized profile names (rrp-mc). Point it at the resolved
+    # container config which has those profiles with static credentials.
+    export AWS_CONFIG_FILE="$_CONTAINER_CONFIG"
+    export AWS_SHARED_CREDENTIALS_FILE=/dev/null
+    export AWS_REGION="$INT_REGION"
+    export CLUSTER_PREFIX=""
+    if [[ -n "${ARTIFACT_DIR:-}" ]]; then
+        export LOG_OUTPUT_DIR="$ARTIFACT_DIR"
+    fi
+
+    "${REPO_ROOT}/scripts/dev/collect-hcp-must-gather.sh"
+}
+
 # =============================================================================
 # Main
 # =============================================================================
@@ -520,7 +539,7 @@ cmd_collect_logs() {
 REPO_ROOT="$(cd "$(dirname "$0")/../.." && pwd)"
 
 case "${1:-help}" in
-    bastion|collect-logs)
+    bastion|collect-logs|hcp-must-gather)
         for tool in jq uv aws; do
             command -v "$tool" >/dev/null 2>&1 || die "Missing required tool: $tool"
         done
@@ -539,11 +558,12 @@ case "${1:-help}" in
 esac
 
 case "${1:-help}" in
-    shell)          cmd_shell ;;
-    bastion)        shift; cmd_bastion "$@" ;;
-    port-forward)   shift; cmd_port_forward "$@" ;;
-    e2e)            cmd_e2e ;;
-    collect-logs)   shift; cmd_collect_logs "$@" ;;
+    shell)            cmd_shell ;;
+    bastion)          shift; cmd_bastion "$@" ;;
+    port-forward)     shift; cmd_port_forward "$@" ;;
+    e2e)              cmd_e2e ;;
+    collect-logs)     shift; cmd_collect_logs "$@" ;;
+    hcp-must-gather)  cmd_hcp_must_gather ;;
     help|*)
         usage
         ;;

@@ -154,6 +154,19 @@ resource "aws_iam_role_policy" "log_collector_s3" {
           "s3:PutObject"
         ]
         Resource = "arn:aws:s3:::bastion-log-collection-*/*"
+      },
+      {
+        # GetObject allows the container to download a must-gather script
+        # that was uploaded by the caller before the task runs.  The script
+        # is uploaded to the same log-collection bucket and deleted by the
+        # caller after the task completes.
+        Sid    = "S3DownloadScript"
+        Effect = "Allow"
+        Action = [
+          "s3:GetObject",
+          "s3:DeleteObject"
+        ]
+        Resource = "arn:aws:s3:::bastion-log-collection-*/*"
       }
     ]
   })
