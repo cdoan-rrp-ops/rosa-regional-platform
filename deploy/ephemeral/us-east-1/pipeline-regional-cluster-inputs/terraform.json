@@ -4,9 +4,9 @@
   "service_phase": "dev",
   "cost_center": "000",
   "environment": "ephemeral",
-  "account_id": "ssm:///infra/ephemeral/us-east-1/account_id",
+  "account_id": "599476212575",
   "region": "us-east-1",
-  "deployment_name": "us-east-1",
+  "deployment_name": "us-east-1-eph-ec5bade1",
   "alias": "regional-us-east-1",
   "enable_bastion": true,
   "enable_cloudtrail": false,
@@ -15,8 +15,8 @@
   "enable_api_custom_domain": false,
   "zone_shard_count": 1,
   "enable_sns_alerting": true,
-  "regional_id": "regional",
-  "eph_prefix": "",
+  "regional_id": "eph-ec5bade1-regional",
+  "eph_prefix": "eph-ec5bade1",
   "iot_log_level": "WARN",
-  "management_clusters_info": [{"account_id": "ssm:///infra/ephemeral/us-east-1/mc01/account_id", "id": "mc01"}]
+  "management_clusters_info": [{"account_id": "855246887846", "id": "eph-ec5bade1-mc01"}]
 }
