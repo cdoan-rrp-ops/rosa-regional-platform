@@ -10,7 +10,7 @@ eksNodePool:
   - m8i-flex
   - m7i-flex
 hyperfleetAdapter1Chart:
-  baseDomain: 0.us-east-1.dev0.rosa.devshift.net
+  baseDomain: 0.us-east-1-eph-078ac512.dev0.rosa.devshift.net
 maestro:
   mqttEndpoint: xxx.iot.us-east-1.amazonaws.com
   iotLogLevel: WARN
